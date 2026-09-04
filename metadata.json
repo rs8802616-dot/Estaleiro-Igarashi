@@ -1,0 +1,6 @@
+{
+  "name": "Estaleiro de Cura de Alho - Projeto 2D & PRD",
+  "description": "Visualizador arquitetônico 3D WebGL e 2D interativo com cortes técnicos, planta baixa, simulação de fluxo de ar por convecção, visão explodida e dimensionamento estrutural para cura de 530 toneladas de alho em rama.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

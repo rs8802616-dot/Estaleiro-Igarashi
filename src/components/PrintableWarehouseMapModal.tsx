@@ -1,0 +1,1106 @@
+import React, { useState, useMemo } from 'react';
+import {
+  Printer,
+  X,
+  FileText,
+  Layers,
+  Scale,
+  Calendar,
+  CheckCircle2,
+  Info,
+  Truck,
+  MapPin,
+  TrendingUp,
+  Download,
+  Filter,
+  Eye,
+  Building2,
+  ChevronDown
+} from 'lucide-react';
+import { TruckHarvestLoad, StorageCellAllocation } from '../types';
+
+interface PrintableWarehouseMapModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  truckLoads: TruckHarvestLoad[];
+  cellAllocations: Record<string, StorageCellAllocation>;
+  galleryCount: number;
+  lengthBays: number;
+  tierCount: number;
+}
+
+export const PrintableWarehouseMapModal: React.FC<PrintableWarehouseMapModalProps> = ({
+  isOpen,
+  onClose,
+  truckLoads,
+  cellAllocations,
+  galleryCount,
+  lengthBays,
+  tierCount,
+}) => {
+  const [viewMode, setViewMode] = useState<'consolidated' | 'by-tier'>('consolidated');
+  const [selectedTier, setSelectedTier] = useState<number>(0);
+  const [filterVariety, setFilterVariety] = useState<string>('all');
+  const [currentDate] = useState(() => {
+    const d = new Date();
+    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  });
+  const [currentTime] = useState(() => {
+    const d = new Date();
+    return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  });
+
+  // Lista de todas as alocações como array tipado
+  const allocationsList = useMemo(() => {
+    return Object.values(cellAllocations) as StorageCellAllocation[];
+  }, [cellAllocations]);
+
+  // Mapa rápido de cargas por ID
+  const loadsById = useMemo(() => {
+    const map: Record<string, TruckHarvestLoad> = {};
+    truckLoads.forEach((l) => {
+      map[l.id] = l;
+    });
+    return map;
+  }, [truckLoads]);
+
+  // Totais Gerais do Mapa
+  const totalKg = useMemo(() => {
+    return allocationsList.reduce((sum, item) => sum + item.allocatedKg, 0);
+  }, [allocationsList]);
+
+  const totalBags = useMemo(() => {
+    return Math.round(allocationsList.reduce((sum, item) => sum + item.allocatedBags, 0));
+  }, [allocationsList]);
+
+  const totalAvailableCells = galleryCount * lengthBays * tierCount;
+  const totalOccupiedCells = allocationsList.length;
+  const occupancyPercent = totalAvailableCells > 0 ? (totalOccupiedCells / totalAvailableCells) * 100 : 0;
+
+  // Resumo por Variedade de Alho
+  const varietySummary = useMemo(() => {
+    const stats: Record<
+      string,
+      {
+        variety: string;
+        color: string;
+        totalKg: number;
+        totalBags: number;
+        cellCount: number;
+        farms: Set<string>;
+        tracts: Set<string>;
+        pivots: Set<string>;
+        trucks: Set<string>;
+        romaneios: Set<string>;
+      }
+    > = {};
+
+    allocationsList.forEach((alloc) => {
+      const load = loadsById[alloc.loadId];
+      if (!load) return;
+
+      if (!stats[load.variety]) {
+        stats[load.variety] = {
+          variety: load.variety,
+          color: load.varietyColor || '#7c3aed',
+          totalKg: 0,
+          totalBags: 0,
+          cellCount: 0,
+          farms: new Set(),
+          tracts: new Set(),
+          pivots: new Set(),
+          trucks: new Set(),
+          romaneios: new Set(),
+        };
+      }
+
+      stats[load.variety].totalKg += alloc.allocatedKg;
+      stats[load.variety].totalBags += alloc.allocatedBags;
+      stats[load.variety].cellCount += 1;
+      if (load.farm) stats[load.variety].farms.add(load.farm);
+      if (load.tract) stats[load.variety].tracts.add(load.tract);
+      if (load.pivot) stats[load.variety].pivots.add(load.pivot);
+      if (load.truckPlate) stats[load.variety].trucks.add(load.truckPlate);
+      if (load.romaneioNumber) stats[load.variety].romaneios.add(load.romaneioNumber);
+    });
+
+    return Object.values(stats).sort((a, b) => b.totalKg - a.totalKg);
+  }, [allocationsList, loadsById]);
+
+  // Resumo por Lado / Meio do Estaleiro
+  const sectorSummary = useMemo(() => {
+    let leftKg = 0;
+    let leftBags = 0;
+    let rightKg = 0;
+    let rightBags = 0;
+    let frontKg = 0;
+    let frontBags = 0;
+    let backKg = 0;
+    let backBags = 0;
+
+    const midGallery = Math.floor(galleryCount / 2);
+    const midBay = Math.floor(lengthBays / 2);
+
+    allocationsList.forEach((alloc) => {
+      if (alloc.galleryIdx < midGallery) {
+        leftKg += alloc.allocatedKg;
+        leftBags += alloc.allocatedBags;
+      } else {
+        rightKg += alloc.allocatedKg;
+        rightBags += alloc.allocatedBags;
+      }
+
+      if (alloc.bayIdx < midBay) {
+        frontKg += alloc.allocatedKg;
+        frontBags += alloc.allocatedBags;
+      } else {
+        backKg += alloc.allocatedKg;
+        backBags += alloc.allocatedBags;
+      }
+    });
+
+    return {
+      leftKg,
+      leftBags: Math.round(leftBags),
+      rightKg,
+      rightBags: Math.round(rightBags),
+      frontKg,
+      frontBags: Math.round(frontBags),
+      backKg,
+      backBags: Math.round(backBags),
+    };
+  }, [allocationsList, galleryCount, lengthBays]);
+
+  // Matriz Consolidada por Vão (Vagão) e Galeria
+  // Para cada par (galeria, vão), agrega todos os níveis
+  const consolidatedGrid = useMemo(() => {
+    const grid: Record<
+      string,
+      {
+        galleryIdx: number;
+        bayIdx: number;
+        totalKg: number;
+        totalBags: number;
+        varieties: Array<{ name: string; color: string; kg: number; bags: number }>;
+        tiers: number[];
+        farms: string[];
+        tracts: string[];
+        pivots: string[];
+        romaneios: string[];
+      }
+    > = {};
+
+    for (let c = 0; c < galleryCount; c++) {
+      for (let b = 0; b < lengthBays; b++) {
+        const key = `g${c}_b${b}`;
+        grid[key] = {
+          galleryIdx: c,
+          bayIdx: b,
+          totalKg: 0,
+          totalBags: 0,
+          varieties: [],
+          tiers: [],
+          farms: [],
+          tracts: [],
+          pivots: [],
+          romaneios: [],
+        };
+      }
+    }
+
+    allocationsList.forEach((alloc) => {
+      const key = `g${alloc.galleryIdx}_b${alloc.bayIdx}`;
+      const cell = grid[key];
+      if (!cell) return;
+
+      const load = loadsById[alloc.loadId];
+      cell.totalKg += alloc.allocatedKg;
+      cell.totalBags += alloc.allocatedBags;
+      if (!cell.tiers.includes(alloc.tierIdx + 1)) {
+        cell.tiers.push(alloc.tierIdx + 1);
+      }
+
+      if (load) {
+        const existingVar = cell.varieties.find((v) => v.name === load.variety);
+        if (existingVar) {
+          existingVar.kg += alloc.allocatedKg;
+          existingVar.bags += alloc.allocatedBags;
+        } else {
+          cell.varieties.push({
+            name: load.variety,
+            color: load.varietyColor || '#7c3aed',
+            kg: alloc.allocatedKg,
+            bags: alloc.allocatedBags,
+          });
+        }
+
+        if (load.farm && !cell.farms.includes(load.farm)) cell.farms.push(load.farm);
+        if (load.tract && !cell.tracts.includes(load.tract)) cell.tracts.push(load.tract);
+        if (load.pivot && !cell.pivots.includes(load.pivot)) cell.pivots.push(load.pivot);
+        if (load.romaneioNumber && !cell.romaneios.includes(load.romaneioNumber)) {
+          cell.romaneios.push(load.romaneioNumber);
+        }
+      }
+    });
+
+    // Ordena os níveis e arredonda bags para evitar dízimas de ponto flutuante
+    Object.values(grid).forEach((c) => {
+      c.tiers.sort((a, b) => a - b);
+      c.totalBags = Math.round(c.totalBags);
+      c.varieties.forEach((v) => {
+        v.bags = Math.round(v.bags);
+      });
+    });
+
+    return grid;
+  }, [allocationsList, galleryCount, lengthBays, loadsById]);
+
+  // Lista de Variedades Únicas para filtro
+  const availableVarieties = useMemo(() => {
+    return Array.from(new Set(truckLoads.map((l) => l.variety)));
+  }, [truckLoads]);
+
+  if (!isOpen) return null;
+
+  // Função para acionar impressão oficial
+  const handlePrint = () => {
+    window.print();
+  };
+
+  // Exportar resumo para arquivo CSV
+  const handleExportCSV = () => {
+    const headers = [
+      'Vagao_Vao',
+      'Galeria',
+      'Veio_Transversal',
+      'Meio_Longitudinal',
+      'Niveis_Ocupados',
+      'Total_Kg',
+      'Total_Bags',
+      'Variedades',
+      'Romaneios',
+      'Fazendas',
+      'Glebas',
+      'Pivos',
+    ];
+
+    const rows: string[] = [];
+    rows.push(headers.join(';'));
+
+    for (let b = 0; b < lengthBays; b++) {
+      for (let c = 0; c < galleryCount; c++) {
+        const key = `g${c}_b${b}`;
+        const cell = consolidatedGrid[key];
+        if (!cell || cell.totalKg === 0) continue;
+
+        const isLeft = c < Math.floor(galleryCount / 2);
+        const isFront = b < Math.floor(lengthBays / 2);
+
+        const row = [
+          `Vagao ${b + 1}`,
+          `Galeria ${c + 1}`,
+          isLeft ? 'Veio Esquerdo' : 'Veio Direito',
+          isFront ? 'Meio Frente' : 'Meio Fundos',
+          `Niveis ${cell.tiers.join(',')}`,
+          cell.totalKg,
+          cell.totalBags,
+          cell.varieties.map((v) => `${v.name} (${v.kg}kg)`).join(' | '),
+          cell.romaneios.join(','),
+          cell.farms.join(','),
+          cell.tracts.join(','),
+          cell.pivots.join(','),
+        ];
+        rows.push(row.map((val) => `"${val}"`).join(';'));
+      }
+    }
+
+    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + encodeURIComponent(rows.join('\n'));
+    const link = document.createElement('a');
+    link.setAttribute('href', csvContent);
+    link.setAttribute('download', `Mapa_Estaleiro_03_${currentDate.replace(/\//g, '-')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in overflow-y-auto">
+      {/* Estilos específicos de impressão para gerar layout limpo A4 em Paisagem */}
+      <style>{`
+        @media print {
+          @page {
+            size: A4 landscape;
+            margin: 8mm 6mm 8mm 6mm;
+          }
+          body * {
+            visibility: hidden !important;
+          }
+          #printable-warehouse-map-root,
+          #printable-warehouse-map-root * {
+            visibility: visible !important;
+          }
+          #printable-warehouse-map-root {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: #ffffff !important;
+            color: #000000 !important;
+            box-shadow: none !important;
+            border: none !important;
+          }
+          .no-print {
+            display: none !important;
+          }
+          .print-break-inside-avoid {
+            break-inside: avoid !important;
+            page-break-inside: avoid !important;
+          }
+          .print-border-solid {
+            border: 1px solid #94a3b8 !important;
+          }
+          .print-bg-gray {
+            background-color: #f8fafc !important;
+          }
+        }
+      `}</style>
+
+      <div className="bg-[#12161f] border border-[#D4A373]/50 rounded-xl shadow-2xl w-full max-w-7xl max-h-[96vh] flex flex-col overflow-hidden text-neutral-100">
+        {/* Barra Superior / Ações de Impressão (Ocultada na impressão) */}
+        <div className="flex flex-wrap items-center justify-between px-4 sm:px-6 py-3 border-b border-neutral-800 bg-[#161c27] gap-3 no-print">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30">
+              <Printer className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base sm:text-lg font-bold text-neutral-100">
+                  Mapa do Estaleiro para Impressão
+                </h2>
+                <span className="text-[11px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono font-bold border border-amber-500/40">
+                  Pronto para Imprimir / PDF
+                </span>
+              </div>
+              <p className="text-xs text-neutral-400">
+                Visualização e ficha de campo com quilos, variedades por vagão e resumo geral
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* Seletor de Modo de Exibição */}
+            <div className="flex items-center bg-[#0e1219] p-1 rounded-lg border border-neutral-700 text-xs">
+              <button
+                onClick={() => setViewMode('consolidated')}
+                className={`px-3 py-1 rounded font-medium transition-all ${
+                  viewMode === 'consolidated'
+                    ? 'bg-amber-500 text-neutral-950 font-bold shadow'
+                    : 'text-neutral-400 hover:text-white'
+                }`}
+                title="Soma todos os níveis por vão e galeria"
+              >
+                Visão Geral Consolidada
+              </button>
+              <button
+                onClick={() => setViewMode('by-tier')}
+                className={`px-3 py-1 rounded font-medium transition-all ${
+                  viewMode === 'by-tier'
+                    ? 'bg-amber-500 text-neutral-950 font-bold shadow'
+                    : 'text-neutral-400 hover:text-white'
+                }`}
+                title="Exibir um nível vertical específico"
+              >
+                Por Nível de Altura
+              </button>
+            </div>
+
+            {/* Seletor de Nível (se ativo) */}
+            {viewMode === 'by-tier' && (
+              <div className="flex items-center gap-1 bg-[#0e1219] px-2 py-1 rounded-lg border border-neutral-700 text-xs">
+                <span className="text-neutral-400">Nível:</span>
+                <select
+                  value={selectedTier}
+                  onChange={(e) => setSelectedTier(Number(e.target.value))}
+                  className="bg-transparent text-amber-400 font-bold focus:outline-none cursor-pointer"
+                >
+                  {Array.from({ length: tierCount }).map((_, i) => (
+                    <option key={i} value={i} className="bg-neutral-900 text-neutral-100">
+                      Nível {i + 1} ({((i + 1) * 1.8 + 1.2).toFixed(1)}m)
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Botão Exportar CSV */}
+            <button
+              onClick={handleExportCSV}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 text-xs font-semibold transition-all"
+              title="Exportar dados do mapa em planilha CSV"
+            >
+              <Download className="w-3.5 h-3.5 text-neutral-400" />
+              <span className="hidden sm:inline">Exportar CSV</span>
+            </button>
+
+            {/* Botão Principal: IMPRIMIR */}
+            <button
+              onClick={handlePrint}
+              className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-950 text-xs font-bold shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
+              title="Imprimir mapa em folha A4 ou salvar como PDF"
+            >
+              <Printer className="w-4 h-4" />
+              <span>Imprimir / Salvar PDF</span>
+            </button>
+
+            {/* Fechar */}
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg hover:bg-neutral-800 text-neutral-400 hover:text-white transition-colors ml-1"
+              title="Fechar"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* ÁREA IMPRIMÍVEL DO DOCUMENTO (Folha de Papel Técnica com visual limpo para campo) */}
+        <div className="overflow-y-auto flex-1 p-3 sm:p-6 bg-neutral-900/60 flex justify-center">
+          <div
+            id="printable-warehouse-map-root"
+            className="w-full max-w-[1240px] bg-white text-neutral-900 rounded-lg shadow-2xl p-4 sm:p-6 border border-neutral-300 font-sans"
+          >
+            {/* CABEÇALHO TÉCNICO OFICIAL */}
+            <div className="border-b-2 border-neutral-900 pb-3 mb-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-md bg-emerald-900 text-emerald-100 flex items-center justify-center font-bold text-xl tracking-wider shadow-sm">
+                    GI
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-emerald-800">
+                      GRUPO IGARASHI • UNIDADE DE CURA NATURAL DE ALHO
+                    </div>
+                    <h1 className="text-xl sm:text-2xl font-black text-neutral-950 uppercase tracking-tight">
+                      MAPA DE OCUPAÇÃO & ROMANEIOS • ESTALEIRO 03
+                    </h1>
+                    <div className="text-xs font-medium text-neutral-600 flex flex-wrap items-center gap-2 mt-0.5">
+                      <span>
+                        Estrutura: {galleryCount} Galerias × {lengthBays} Vãos (Vagões de 4,5m) × {tierCount} Níveis
+                      </span>
+                      <span>•</span>
+                      <span>Dimensões: 36,0m × 72,0m • Altura: 15,0m</span>
+                      <span>•</span>
+                      <span className="font-semibold text-neutral-800">Capacidade Nominal: 527.904 kg (18,80 ha)</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-right text-xs text-neutral-600 bg-neutral-100 px-3 py-2 rounded border border-neutral-300 shrink-0">
+                  <div>
+                    <span className="font-semibold text-neutral-900">Emissão: </span>
+                    {currentDate} às {currentTime}
+                  </div>
+                  <div>
+                    <span className="font-semibold text-neutral-900">Modo: </span>
+                    {viewMode === 'consolidated'
+                      ? 'Consolidado Geral (Todos os Níveis)'
+                      : `Nível ${selectedTier + 1} (${((selectedTier + 1) * 1.8 + 1.2).toFixed(1)}m)`}
+                  </div>
+                  <div>
+                    <span className="font-semibold text-neutral-900">Status da Safra: </span>
+                    <span className="text-emerald-700 font-bold">Safra em Plena Cura</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* SEÇÃO 1: RESUMO GERAL EXECUTIVO (KPIS) */}
+            <div className="mb-4 print-break-inside-avoid">
+              <div className="text-xs font-bold uppercase tracking-wider text-neutral-700 mb-2 flex items-center gap-1.5">
+                <TrendingUp className="w-3.5 h-3.5 text-neutral-900" />
+                <span>1. Resumo Geral de Carga & Balança</span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mb-3">
+                <div className="p-2.5 rounded bg-neutral-50 border border-neutral-200">
+                  <div className="text-[10px] uppercase font-bold text-neutral-500">Carga Total Armazenada</div>
+                  <div className="text-lg sm:text-xl font-black text-neutral-950 font-mono mt-0.5">
+                    {totalKg.toLocaleString('pt-BR')} <span className="text-xs font-normal">kg</span>
+                  </div>
+                  <div className="text-[11px] font-semibold text-amber-700 font-mono">
+                    {(totalKg / 1000).toFixed(1)} toneladas de rama
+                  </div>
+                </div>
+
+                <div className="p-2.5 rounded bg-neutral-50 border border-neutral-200">
+                  <div className="text-[10px] uppercase font-bold text-neutral-500">Total de Bags Pesados</div>
+                  <div className="text-lg sm:text-xl font-black text-neutral-950 font-mono mt-0.5">
+                    {totalBags.toLocaleString('pt-BR')} <span className="text-xs font-normal">bags</span>
+                  </div>
+                  <div className="text-[11px] font-medium text-neutral-600">
+                    Média: {totalBags > 0 ? Math.round(totalKg / totalBags) : 0} kg/bag
+                  </div>
+                </div>
+
+                <div className="p-2.5 rounded bg-neutral-50 border border-neutral-200">
+                  <div className="text-[10px] uppercase font-bold text-neutral-500">Taxa de Ocupação Real</div>
+                  <div className="text-lg sm:text-xl font-black text-neutral-950 font-mono mt-0.5">
+                    {occupancyPercent.toFixed(1)}%
+                  </div>
+                  <div className="text-[11px] font-medium text-neutral-600">
+                    {totalOccupiedCells} de {totalAvailableCells} módulos ocupados
+                  </div>
+                </div>
+
+                <div className="p-2.5 rounded bg-neutral-50 border border-neutral-200">
+                  <div className="text-[10px] uppercase font-bold text-neutral-500">Caminhões / Romaneios</div>
+                  <div className="text-lg sm:text-xl font-black text-neutral-950 font-mono mt-0.5">
+                    {truckLoads.length} <span className="text-xs font-normal">cargas</span>
+                  </div>
+                  <div className="text-[11px] font-medium text-neutral-600">
+                    {varietySummary.length} variedades identificadas
+                  </div>
+                </div>
+              </div>
+
+              {/* Tabela de Resumo por Variedade de Alho */}
+              <div className="border border-neutral-300 rounded overflow-hidden mb-3">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-neutral-100 text-neutral-700 font-bold border-b border-neutral-300 text-[11px]">
+                      <th className="py-1.5 px-2.5">Variedade de Alho</th>
+                      <th className="py-1.5 px-2 text-right">Peso Líquido (kg)</th>
+                      <th className="py-1.5 px-2 text-right">Toneladas</th>
+                      <th className="py-1.5 px-2 text-right">Qtd. Bags</th>
+                      <th className="py-1.5 px-2 text-right">% do Total</th>
+                      <th className="py-1.5 px-2.5">Fazendas / Glebas / Pivôs de Origem</th>
+                      <th className="py-1.5 px-2 text-center">Romaneios</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-200 font-mono text-[11px]">
+                    {varietySummary.map((v) => {
+                      const percent = totalKg > 0 ? (v.totalKg / totalKg) * 100 : 0;
+                      return (
+                        <tr key={v.variety} className="hover:bg-neutral-50">
+                          <td className="py-1.5 px-2.5 font-sans font-bold flex items-center gap-1.5 text-neutral-900">
+                            <span
+                              className="w-3 h-3 rounded-full border border-black/20 shrink-0"
+                              style={{ backgroundColor: v.color }}
+                            />
+                            <span>{v.variety}</span>
+                          </td>
+                          <td className="py-1.5 px-2 text-right font-bold text-neutral-950">
+                            {v.totalKg.toLocaleString('pt-BR')} kg
+                          </td>
+                          <td className="py-1.5 px-2 text-right text-neutral-700">
+                            {(v.totalKg / 1000).toFixed(1)} t
+                          </td>
+                          <td className="py-1.5 px-2 text-right text-neutral-800">{v.totalBags} bags</td>
+                          <td className="py-1.5 px-2 text-right font-bold text-amber-800">
+                            {percent.toFixed(1)}%
+                          </td>
+                          <td className="py-1.5 px-2.5 font-sans text-neutral-700 text-[10px]">
+                            {Array.from(v.farms).join(', ') || 'N/A'} • Gleba:{' '}
+                            {Array.from(v.tracts).join(', ') || 'N/A'} • Pivô:{' '}
+                            {Array.from(v.pivots).join(', ') || 'N/A'}
+                          </td>
+                          <td className="py-1.5 px-2 text-center text-neutral-600 text-[10px]">
+                            {Array.from(v.romaneios).join(', ')}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Sub-Resumo de Veios e Meio do Estaleiro */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs border border-neutral-200 p-2 rounded bg-neutral-50">
+                <div className="p-1.5 rounded bg-sky-50/60 border border-sky-200">
+                  <span className="text-[10px] text-sky-900 font-bold uppercase block">
+                    Veio Esquerdo (G1 a G{Math.floor(galleryCount / 2)}):
+                  </span>
+                  <span className="font-bold font-mono text-neutral-900">
+                    {sectorSummary.leftKg.toLocaleString('pt-BR')} kg
+                  </span>{' '}
+                  <span className="text-neutral-600 text-[10px] font-mono">
+                    ({Math.round(sectorSummary.leftBags)} bags)
+                  </span>
+                  <span className="block text-[9px] text-sky-700 mt-0.5 font-medium">Lado Esquerdo do Meio</span>
+                </div>
+                <div className="p-1.5 rounded bg-indigo-50/60 border border-indigo-200">
+                  <span className="text-[10px] text-indigo-900 font-bold uppercase block">
+                    Veio Direito (G{Math.floor(galleryCount / 2) + 1} a G{galleryCount}):
+                  </span>
+                  <span className="font-bold font-mono text-neutral-900">
+                    {sectorSummary.rightKg.toLocaleString('pt-BR')} kg
+                  </span>{' '}
+                  <span className="text-neutral-600 text-[10px] font-mono">
+                    ({Math.round(sectorSummary.rightBags)} bags)
+                  </span>
+                  <span className="block text-[9px] text-indigo-700 mt-0.5 font-medium">Lado Direito do Meio</span>
+                </div>
+                <div className="p-1.5 rounded bg-neutral-50 border border-neutral-200">
+                  <span className="text-[10px] text-neutral-600 font-bold uppercase block">
+                    Setor Frente (Vãos 1 a {Math.floor(lengthBays / 2)}):
+                  </span>
+                  <span className="font-bold font-mono text-neutral-900">
+                    {sectorSummary.frontKg.toLocaleString('pt-BR')} kg
+                  </span>{' '}
+                  <span className="text-neutral-600 text-[10px] font-mono">
+                    ({Math.round(sectorSummary.frontBags)} bags)
+                  </span>
+                  <span className="block text-[9px] text-neutral-500 mt-0.5">Comprimento Inicial (0m a {(Math.floor(lengthBays / 2) * 4.5).toFixed(0)}m)</span>
+                </div>
+                <div className="p-1.5 rounded bg-neutral-50 border border-neutral-200">
+                  <span className="text-[10px] text-neutral-600 font-bold uppercase block">
+                    Setor Fundos (Vãos {Math.floor(lengthBays / 2) + 1} a {lengthBays}):
+                  </span>
+                  <span className="font-bold font-mono text-neutral-900">
+                    {sectorSummary.backKg.toLocaleString('pt-BR')} kg
+                  </span>{' '}
+                  <span className="text-neutral-600 text-[10px] font-mono">
+                    ({Math.round(sectorSummary.backBags)} bags)
+                  </span>
+                  <span className="block text-[9px] text-neutral-500 mt-0.5">Comprimento Final ({(Math.floor(lengthBays / 2) * 4.5).toFixed(0)}m a {(lengthBays * 4.5).toFixed(0)}m)</span>
+                </div>
+              </div>
+            </div>
+
+            {/* SEÇÃO 2: MAPA MATRICIAL GRÁFICO POR VAGÃO (VÃO) E GALERIA */}
+            <div className="mb-4 print-break-inside-avoid">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-xs font-bold uppercase tracking-wider text-neutral-700 flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5 text-neutral-900" />
+                  <span>
+                    2. Planta Gráfica do Estaleiro • Informações por Vagão (Vão de 4,5m) & Galeria
+                  </span>
+                </div>
+                <div className="text-[10px] font-mono text-neutral-500">
+                  Sentido: Frente (Vão 01) ➔ Fundos (Vão {String(lengthBays).padStart(2, '0')})
+                </div>
+              </div>
+
+              {/* Legenda de Orientação com Eixo Central / Meio do Estaleiro */}
+              <div className="flex flex-wrap items-center justify-between text-[10px] font-semibold text-neutral-700 bg-neutral-100 px-3 py-1.5 rounded border border-neutral-300 mb-2 gap-2">
+                <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
+                  <span className="flex items-center gap-1.5 text-sky-950 font-bold">
+                    <span className="w-2.5 h-2.5 bg-sky-700 rounded-xs inline-block"></span>
+                    <span>Veio Esquerdo (G1 a G{Math.floor(galleryCount / 2)})</span>
+                  </span>
+
+                  {/* DESTAQUE OFICIAL: O MEIO DO ESTALEIRO ENTRE AS GALERIAS */}
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-red-600 text-white font-black text-[10px] tracking-wider shadow-sm uppercase">
+                    <span className="w-2 h-2 rounded-full bg-white inline-block" />
+                    <span>Linha Vermelha Vertical = MEIO DO ESTALEIRO (Eixo Central)</span>
+                  </span>
+
+                  <span className="flex items-center gap-1.5 text-indigo-950 font-bold">
+                    <span className="w-2.5 h-2.5 bg-indigo-700 rounded-xs inline-block"></span>
+                    <span>Veio Direito (G{Math.floor(galleryCount / 2) + 1} a G{galleryCount})</span>
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-3 text-neutral-500 text-[9px] font-mono">
+                  <span>Comprimento: Vão 01 (Frente) ➔ Vão {String(lengthBays).padStart(2, '0')} (Fundos)</span>
+                </div>
+              </div>
+
+              {/* TABELA / MATRIZ PLANTA BAIXA IMPRIMÍVEL */}
+              <div className="overflow-x-auto border border-neutral-400 rounded">
+                <table className="w-full text-left border-collapse text-neutral-900 text-[10px]">
+                  <thead>
+                    {/* Linha de Agrupamento Macro: Veio Esquerdo | MEIO DO ESTALEIRO | Veio Direito */}
+                    <tr className="bg-neutral-900 text-white font-bold text-[9px] tracking-wider uppercase">
+                      <th colSpan={2} className="py-1.5 px-2 text-center bg-neutral-950 text-neutral-400 border-r border-neutral-700 font-mono">
+                        VAGÕES (COMPRIMENTO)
+                      </th>
+                      <th
+                        colSpan={Math.floor(galleryCount / 2)}
+                        className="py-1.5 px-2 text-center bg-[#0c1f38] text-sky-200 border-r-4 border-r-red-600 print:border-r-4 print:border-r-black font-bold tracking-wider"
+                      >
+                        ◄ VEIO ESQUERDO (Galerias 1 a {Math.floor(galleryCount / 2)} • Lado Esquerdo do Meio)
+                      </th>
+                      <th
+                        colSpan={galleryCount - Math.floor(galleryCount / 2)}
+                        className="py-1.5 px-2 text-center bg-[#17153b] text-indigo-200 border-r border-neutral-700 font-bold tracking-wider"
+                      >
+                        VEIO DIREITO (Galerias {Math.floor(galleryCount / 2) + 1} a {galleryCount} • Lado Direito do Meio) ►
+                      </th>
+                      <th className="py-1.5 px-2 text-right bg-neutral-950 text-neutral-400 font-mono">
+                        TOTAIS
+                      </th>
+                    </tr>
+
+                    {/* Linha das Galerias Individuais */}
+                    <tr className="bg-neutral-800 text-white font-bold border-b border-neutral-600">
+                      <th className="py-2 px-2 text-center w-16 border-r border-neutral-700">Vagão</th>
+                      <th className="py-2 px-2 text-center w-20 border-r border-neutral-700">Posição</th>
+                      {Array.from({ length: galleryCount }).map((_, c) => {
+                        const midG = Math.floor(galleryCount / 2);
+                        const isMidLeftBoundary = c === midG - 1;
+                        const isMidRightBoundary = c === midG;
+                        const isLeft = c < midG;
+
+                        return (
+                          <th
+                            key={c}
+                            className={`py-2 px-2 text-center ${
+                              isMidLeftBoundary
+                                ? 'border-r-4 border-r-red-600 print:border-r-4 print:border-r-black bg-neutral-800/95'
+                                : 'border-r border-neutral-700 last:border-r-0'
+                            }`}
+                          >
+                            <div className="font-bold">Galeria {c + 1}</div>
+                            <div className="text-[9px] font-normal text-neutral-300">
+                              {isLeft ? 'Veio Esq.' : 'Veio Dir.'} (L: 6,0m)
+                            </div>
+                            {isMidLeftBoundary && (
+                              <div className="text-[8px] font-black text-red-300 bg-red-950/90 px-1 py-0.5 rounded border border-red-500/60 mt-1 uppercase tracking-tight">
+                                ◄ MEIO DO ESTALEIRO
+                              </div>
+                            )}
+                            {isMidRightBoundary && (
+                              <div className="text-[8px] font-black text-red-300 bg-red-950/90 px-1 py-0.5 rounded border border-red-500/60 mt-1 uppercase tracking-tight">
+                                MEIO DO ESTALEIRO ►
+                              </div>
+                            )}
+                          </th>
+                        );
+                      })}
+                      <th className="py-2 px-2 text-right w-24 bg-neutral-900">Total do Vagão</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-300">
+                    {Array.from({ length: lengthBays }).map((_, b) => {
+                      const isFront = b < Math.floor(lengthBays / 2);
+
+                      // Soma total de kg e bags deste vagão específico através de todas as galerias
+                      let bayTotalKg = 0;
+                      let bayTotalBags = 0;
+
+                      for (let c = 0; c < galleryCount; c++) {
+                        if (viewMode === 'consolidated') {
+                          const cell = consolidatedGrid[`g${c}_b${b}`];
+                          if (cell) {
+                            bayTotalKg += cell.totalKg;
+                            bayTotalBags += cell.totalBags;
+                          }
+                        } else {
+                          const alloc = cellAllocations[`g${c}_b${b}_t${selectedTier}`];
+                          if (alloc) {
+                            bayTotalKg += alloc.allocatedKg;
+                            bayTotalBags += alloc.allocatedBags;
+                          }
+                        }
+                      }
+
+                      return (
+                        <tr key={b} className={`hover:bg-neutral-50 ${b % 2 === 0 ? 'bg-white' : 'bg-neutral-50/60'}`}>
+                          {/* Número do Vagão */}
+                          <td className="py-1.5 px-2 text-center font-bold font-mono bg-neutral-100 border-r border-neutral-300">
+                            <span className="px-1.5 py-0.5 rounded bg-neutral-200 text-neutral-900">
+                              Vão {String(b + 1).padStart(2, '0')}
+                            </span>
+                          </td>
+
+                          {/* Posição no Comprimento (Frente / Fundos) */}
+                          <td className="py-1.5 px-2 text-center text-[9px] font-medium text-neutral-600 border-r border-neutral-300">
+                            <span
+                              className={`px-1 py-0.5 rounded font-bold ${
+                                isFront
+                                  ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                  : 'bg-blue-100 text-blue-900 border border-blue-300'
+                              }`}
+                            >
+                              {isFront ? 'Frente' : 'Fundos'}
+                            </span>
+                            <div className="text-[8px] text-neutral-400 font-mono mt-0.5">
+                              {(b * 4.5).toFixed(0)}m-
+                              {((b + 1) * 4.5).toFixed(0)}m
+                            </div>
+                          </td>
+
+                          {/* Células das Galerias */}
+                          {Array.from({ length: galleryCount }).map((_, c) => {
+                            const midG = Math.floor(galleryCount / 2);
+                            const isMidDivider = c === midG - 1;
+                            const borderClass = isMidDivider
+                              ? 'border-r-4 border-r-red-600 print:border-r-4 print:border-r-black'
+                              : 'border-r border-neutral-300 last:border-r-0';
+
+                            if (viewMode === 'consolidated') {
+                              const cell = consolidatedGrid[`g${c}_b${b}`];
+                              const hasGarlic = cell && cell.totalKg > 0;
+
+                              return (
+                                <td
+                                  key={c}
+                                  className={`py-1.5 px-2 align-top transition-colors ${borderClass} ${
+                                    hasGarlic ? 'bg-amber-50/50' : 'bg-neutral-50/30'
+                                  }`}
+                                >
+                                  {hasGarlic ? (
+                                    <div className="space-y-1">
+                                      <div className="flex items-center justify-between font-mono">
+                                        <span className="font-black text-neutral-950 text-[11px]">
+                                          {cell.totalKg.toLocaleString('pt-BR')} kg
+                                        </span>
+                                        <span className="text-neutral-600 font-semibold text-[10px]">
+                                          {Math.round(cell.totalBags)} bags
+                                        </span>
+                                      </div>
+
+                                      {/* Variedades presentes neste vagão */}
+                                      <div className="flex flex-wrap gap-1">
+                                        {cell.varieties.map((v) => (
+                                          <span
+                                            key={v.name}
+                                            className="inline-flex items-center gap-1 px-1 py-0.2 rounded text-[9px] font-bold border border-black/15"
+                                            style={{
+                                              backgroundColor: `${v.color}22`,
+                                              color: '#1e1b4b',
+                                              borderColor: v.color,
+                                            }}
+                                          >
+                                            <span
+                                              className="w-1.5 h-1.5 rounded-full"
+                                              style={{ backgroundColor: v.color }}
+                                            />
+                                            <span>{v.name}</span>
+                                          </span>
+                                        ))}
+                                      </div>
+
+                                      {/* Metadados adicionais: Níveis e Romaneios */}
+                                      <div className="text-[8.5px] text-neutral-600 font-sans leading-tight">
+                                        <span className="font-semibold text-neutral-800">
+                                          Níveis: {cell.tiers.join(', ')}
+                                        </span>
+                                        {cell.farms.length > 0 && (
+                                          <div>{cell.farms[0]} {cell.pivots.length > 0 ? `(${cell.pivots[0]})` : ''}</div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="h-full flex items-center justify-center py-2 text-[9px] text-neutral-400 italic">
+                                      Vazio / Livre
+                                    </div>
+                                  )}
+                                </td>
+                              );
+                            } else {
+                              // Modo por Nível Específico
+                              const key = `g${c}_b${b}_t${selectedTier}`;
+                              const alloc = cellAllocations[key];
+                              const load = alloc ? loadsById[alloc.loadId] : null;
+
+                              return (
+                                <td
+                                  key={c}
+                                  className={`py-1.5 px-2 align-top ${borderClass} ${
+                                    alloc ? 'bg-amber-50/70' : 'bg-neutral-50/30'
+                                  }`}
+                                >
+                                  {alloc && load ? (
+                                    <div className="space-y-0.5">
+                                      <div className="flex items-center justify-between font-mono">
+                                        <span className="font-black text-neutral-950 text-[11px]">
+                                          {alloc.allocatedKg.toLocaleString('pt-BR')} kg
+                                        </span>
+                                        <span className="text-neutral-600 font-semibold text-[10px]">
+                                          {Math.round(alloc.allocatedBags)} bags
+                                        </span>
+                                      </div>
+                                      <div
+                                        className="inline-flex items-center gap-1 px-1 py-0.2 rounded text-[9px] font-bold border"
+                                        style={{
+                                          backgroundColor: `${load.varietyColor}22`,
+                                          color: '#1e1b4b',
+                                          borderColor: load.varietyColor,
+                                        }}
+                                      >
+                                        <span>{load.variety}</span>
+                                      </div>
+                                      <div className="text-[8.5px] text-neutral-600">
+                                        {load.farm} • {load.pivot}
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="py-2 text-center text-[9px] text-neutral-400 italic">
+                                      Livre
+                                    </div>
+                                  )}
+                                </td>
+                              );
+                            }
+                          })}
+
+                          {/* Total Acumulado do Vagão (Linha) */}
+                          <td className="py-1.5 px-2 text-right font-mono bg-neutral-100 font-bold border-l border-neutral-300">
+                            <div className="text-neutral-950 text-[11px]">
+                              {bayTotalKg > 0 ? `${bayTotalKg.toLocaleString('pt-BR')} kg` : '-'}
+                            </div>
+                            {bayTotalBags > 0 && (
+                              <div className="text-[9px] text-neutral-500 font-normal">
+                                {Math.round(bayTotalBags)} bags
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-neutral-200 font-bold font-mono text-neutral-950 border-t-2 border-neutral-800 text-[11px]">
+                      <td colSpan={2} className="py-2 px-2 text-center uppercase font-sans font-black">
+                        Totais por Galeria
+                      </td>
+                      {Array.from({ length: galleryCount }).map((_, c) => {
+                        const midG = Math.floor(galleryCount / 2);
+                        const isMidDivider = c === midG - 1;
+                        let galKg = 0;
+                        let galBags = 0;
+                        for (let b = 0; b < lengthBays; b++) {
+                          const cell = consolidatedGrid[`g${c}_b${b}`];
+                          if (cell) {
+                            galKg += cell.totalKg;
+                            galBags += cell.totalBags;
+                          }
+                        }
+                        return (
+                          <td
+                            key={c}
+                            className={`py-2 px-2 text-center ${
+                              isMidDivider
+                                ? 'border-r-4 border-r-red-600 print:border-r-4 print:border-r-black'
+                                : 'border-r border-neutral-300'
+                            }`}
+                          >
+                            <div>{galKg.toLocaleString('pt-BR')} kg</div>
+                            <div className="text-[9px] text-neutral-600 font-normal font-sans">
+                              {Math.round(galBags)} bags ({(galKg / 1000).toFixed(1)}t)
+                            </div>
+                            {isMidDivider && (
+                              <div className="text-[8px] font-black text-red-600 print:text-black uppercase tracking-tighter mt-0.5">
+                                ▲ MEIO DO ESTALEIRO ▲
+                              </div>
+                            )}
+                          </td>
+                        );
+                      })}
+                      <td className="py-2 px-2 text-right font-black text-amber-950 bg-amber-200">
+                        <div>{totalKg.toLocaleString('pt-BR')} kg</div>
+                        <div className="text-[9px] text-amber-900 font-normal font-sans">
+                          {Math.round(totalBags)} bags ({(totalKg / 1000).toFixed(1)}t)
+                        </div>
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+
+            {/* SEÇÃO 3: TABELA DE ROMANEIOS E REGISTRO DE CAMINHÕES */}
+            <div className="mb-4 print-break-inside-avoid">
+              <div className="text-xs font-bold uppercase tracking-wider text-neutral-700 mb-2 flex items-center gap-1.5">
+                <Truck className="w-3.5 h-3.5 text-neutral-900" />
+                <span>3. Relação de Romaneios Pesados na Balança Rodoviária</span>
+              </div>
+
+              <div className="border border-neutral-300 rounded overflow-hidden">
+                <table className="w-full text-left text-xs border-collapse font-sans text-[10.5px]">
+                  <thead>
+                    <tr className="bg-neutral-100 text-neutral-700 font-bold border-b border-neutral-300 text-[10px]">
+                      <th className="py-1.5 px-2">Romaneio</th>
+                      <th className="py-1.5 px-2">Placa</th>
+                      <th className="py-1.5 px-2">Origem (Fazenda / Gleba / Pivô)</th>
+                      <th className="py-1.5 px-2">Variedade</th>
+                      <th className="py-1.5 px-2 text-right font-mono">Peso Líquido</th>
+                      <th className="py-1.5 px-2 text-right font-mono">Bags</th>
+                      <th className="py-1.5 px-2">Localização no Estaleiro</th>
+                      <th className="py-1.5 px-2 text-center">Cura</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-200 font-mono text-[10.5px]">
+                    {truckLoads.map((load) => {
+                      const occupied = allocationsList.filter((a) => a.loadId === load.id);
+                      const gOccupied = Array.from(new Set(occupied.map((c) => Number(c.galleryIdx + 1)))).sort(
+                        (a: number, b: number) => a - b
+                      );
+                      const bOccupied = Array.from(new Set(occupied.map((c) => Number(c.bayIdx + 1)))).sort(
+                        (a: number, b: number) => a - b
+                      );
+                      const tOccupied = Array.from(new Set(occupied.map((c) => Number(c.tierIdx + 1)))).sort(
+                        (a: number, b: number) => a - b
+                      );
+
+                      return (
+                        <tr key={load.id} className="hover:bg-neutral-50">
+                          <td className="py-1.5 px-2 font-bold text-neutral-950 font-mono">{load.romaneioNumber}</td>
+                          <td className="py-1.5 px-2 text-neutral-700 font-mono">{load.truckPlate || 'S/ Placa'}</td>
+                          <td className="py-1.5 px-2 font-sans text-neutral-800">
+                            {load.farm} • Gleba {load.tract} • Pivô {load.pivot}
+                          </td>
+                          <td className="py-1.5 px-2 font-sans font-bold flex items-center gap-1.5">
+                            <span
+                              className="w-2.5 h-2.5 rounded-full shrink-0"
+                              style={{ backgroundColor: load.varietyColor }}
+                            />
+                            <span>{load.variety}</span>
+                          </td>
+                          <td className="py-1.5 px-2 text-right font-bold text-neutral-900 font-mono">
+                            {load.totalWeightKg.toLocaleString('pt-BR')} kg
+                          </td>
+                          <td className="py-1.5 px-2 text-right text-neutral-700 font-mono">{load.bagsCount} bags</td>
+                          <td className="py-1.5 px-2 font-sans text-[10px] text-neutral-700">
+                            Gal: {gOccupied.join(', ') || 'N/A'} • Vãos: {bOccupied.join(', ') || 'N/A'} • Níveis:{' '}
+                            {tOccupied.join(', ') || 'N/A'}
+                          </td>
+                          <td className="py-1.5 px-2 text-center text-emerald-800 font-bold font-sans">
+                            {load.daysCuring} dias
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* SEÇÃO 4: TERMO DE CONFERÊNCIA & ASSINATURAS OFICIAIS */}
+            <div className="pt-3 border-t border-neutral-300 text-xs text-neutral-600 print-break-inside-avoid">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-6 mb-2">
+                <div className="text-center">
+                  <div className="border-t border-neutral-900 w-3/4 mx-auto mb-1"></div>
+                  <div className="font-bold text-neutral-950 text-xs uppercase">
+                    Responsável pelo Estaleiro & Balança
+                  </div>
+                  <div className="text-[10px] text-neutral-500">
+                    Conferência de Peso Líquido, Bags e Alocação por Vão
+                  </div>
+                </div>
+
+                <div className="text-center">
+                  <div className="border-t border-neutral-900 w-3/4 mx-auto mb-1"></div>
+                  <div className="font-bold text-neutral-950 text-xs uppercase">
+                    Engenheiro Agrônomo / Controle de Qualidade
+                  </div>
+                  <div className="text-[10px] text-neutral-500">
+                    Atestado de Sanidade, Umidade e Monitoramento de Cura Natural
+                  </div>
+                </div>
+              </div>
+
+              <div className="text-center text-[9px] text-neutral-400 font-mono pt-3">
+                Grupo Igarashi • Sistema Integrado de Gestão de Estaleiros de Alho • Estaleiro 03 • Gerado eletronicamente em {currentDate} às {currentTime}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
