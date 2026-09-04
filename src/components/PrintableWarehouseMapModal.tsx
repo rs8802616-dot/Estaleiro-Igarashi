@@ -42,7 +42,8 @@ export const PrintableWarehouseMapModal: React.FC<PrintableWarehouseMapModalProp
   const [selectedTier, setSelectedTier] = useState<number>(0);
   const [filterVariety, setFilterVariety] = useState<string>('all');
   const [printFormat, setPrintFormat] = useState<'single-page' | 'multi-page'>('single-page');
-  const [printScale, setPrintScale] = useState<number>(93); // 93% garante encaixe perfeito em 1 folha A4 em qualquer impressora
+  const [printScale, setPrintScale] = useState<number>(100); // 100% preenche totalmente a folha A4 em paisagem
+  const [mapDensity, setMapDensity] = useState<'normal' | 'large' | 'extra-large'>('large'); // Tamanho grande para o mapa do estaleiro ocupar o espaço livre
   const [showPrintTips, setShowPrintTips] = useState<boolean>(false);
   const [currentDate] = useState(() => {
     const d = new Date();
@@ -333,7 +334,7 @@ export const PrintableWarehouseMapModal: React.FC<PrintableWarehouseMapModalProp
         @media print {
           @page {
             size: A4 landscape;
-            margin: ${printFormat === 'single-page' ? '3mm 4mm 3mm 4mm' : '8mm 6mm 8mm 6mm'};
+            margin: ${printFormat === 'single-page' ? '2mm 3mm 2mm 3mm' : '8mm 6mm 8mm 6mm'};
           }
           html, body {
             margin: 0 !important;
@@ -359,7 +360,7 @@ export const PrintableWarehouseMapModal: React.FC<PrintableWarehouseMapModalProp
             width: 100% !important;
             max-width: 100% !important;
             margin: 0 !important;
-            padding: ${printFormat === 'single-page' ? '1.5mm 2.5mm' : '4mm 6mm'} !important;
+            padding: ${printFormat === 'single-page' ? '1mm 2mm' : '4mm 6mm'} !important;
             background: #ffffff !important;
             color: #000000 !important;
             box-shadow: none !important;
@@ -449,23 +450,38 @@ export const PrintableWarehouseMapModal: React.FC<PrintableWarehouseMapModalProp
               </button>
             </div>
 
-            {/* SELETOR DE ESCALA A4 (se formato Folha Única) */}
+            {/* SELETOR DE TAMANHO DO ESTALEIRO & ESCALA A4 (se formato Folha Única) */}
             {printFormat === 'single-page' && (
-              <div className="flex items-center gap-1.5 bg-[#0e1219] px-2 py-1 rounded-lg border border-neutral-700 text-xs">
-                <span className="text-neutral-400 text-[11px]">Escala A4:</span>
-                <select
-                  value={printScale}
-                  onChange={(e) => setPrintScale(Number(e.target.value))}
-                  className="bg-transparent text-emerald-400 font-bold focus:outline-none cursor-pointer"
-                  title="Ajuste a escala se a margem física da sua impressora for diferente"
-                >
-                  <option value={93} className="bg-neutral-900 text-neutral-100">93% (Ideal A4)</option>
-                  <option value={90} className="bg-neutral-900 text-neutral-100">90% (Mais Seguro)</option>
-                  <option value={86} className="bg-neutral-900 text-neutral-100">86% (Compacto)</option>
-                  <option value={96} className="bg-neutral-900 text-neutral-100">96% (Máximo)</option>
-                  <option value={100} className="bg-neutral-900 text-neutral-100">100%</option>
-                </select>
-              </div>
+              <>
+                <div className="flex items-center gap-1.5 bg-[#0e1219] px-2.5 py-1 rounded-lg border border-neutral-700 text-xs">
+                  <span className="text-neutral-400 text-[11px]">Tamanho do Mapa:</span>
+                  <select
+                    value={mapDensity}
+                    onChange={(e) => setMapDensity(e.target.value as 'normal' | 'large' | 'extra-large')}
+                    className="bg-transparent text-amber-400 font-bold focus:outline-none cursor-pointer"
+                    title="Aumente para o mapa do estaleiro preencher ao máximo o espaço livre na folha A4"
+                  >
+                    <option value="large" className="bg-neutral-900 text-neutral-100">Grande (Recomendado)</option>
+                    <option value="extra-large" className="bg-neutral-900 text-neutral-100">Extra Grande (Máximo)</option>
+                    <option value="normal" className="bg-neutral-900 text-neutral-100">Normal</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-1.5 bg-[#0e1219] px-2.5 py-1 rounded-lg border border-neutral-700 text-xs">
+                  <span className="text-neutral-400 text-[11px]">Escala A4:</span>
+                  <select
+                    value={printScale}
+                    onChange={(e) => setPrintScale(Number(e.target.value))}
+                    className="bg-transparent text-emerald-400 font-bold focus:outline-none cursor-pointer"
+                    title="Ajuste a escala para preencher 100% da folha física"
+                  >
+                    <option value={100} className="bg-neutral-900 text-neutral-100">100% (Folha Cheia - Padrão)</option>
+                    <option value={104} className="bg-neutral-900 text-neutral-100">104% (Expansão Total)</option>
+                    <option value={96} className="bg-neutral-900 text-neutral-100">96% (Margem Segura)</option>
+                    <option value={92} className="bg-neutral-900 text-neutral-100">92% (Compacto)</option>
+                  </select>
+                </div>
+              </>
             )}
 
             {/* Dicas de Impressão A4 */}
@@ -594,7 +610,17 @@ export const PrintableWarehouseMapModal: React.FC<PrintableWarehouseMapModalProp
               /* ========================================================================= */
               /* LAYOUT 100% OTIMIZADO PARA 1 ÚNICA FOLHA A4 PAISAGEM (PÁGINA ÚNICA)     */
               /* ========================================================================= */
-              <div className="flex flex-col gap-2 w-full">
+              (() => {
+                const isExtraLarge = mapDensity === 'extra-large';
+                const isLarge = mapDensity === 'large';
+                const mapRowPy = isExtraLarge ? 'py-2.5 sm:py-3 px-2' : isLarge ? 'py-2 sm:py-2.5 px-2' : 'py-1.5 px-1.5';
+                const mapKgText = isExtraLarge ? 'text-xs sm:text-[12.5px]' : isLarge ? 'text-[11px] sm:text-xs' : 'text-[9.5px]';
+                const mapBagText = isExtraLarge ? 'text-[10px]' : isLarge ? 'text-[9.5px]' : 'text-[8px]';
+                const mapTagText = isExtraLarge ? 'text-[9.5px]' : isLarge ? 'text-[9px]' : 'text-[8px]';
+                const mapBayText = isExtraLarge ? 'text-xs sm:text-[12px]' : isLarge ? 'text-[11px]' : 'text-[9.5px]';
+
+                return (
+              <div className="flex flex-col gap-1.5 sm:gap-2 w-full">
                 {/* CABEÇALHO TÉCNICO OFICIAL COMPACTO */}
                 <div className="border-b-2 border-neutral-900 pb-1.5 flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
@@ -757,25 +783,25 @@ export const PrintableWarehouseMapModal: React.FC<PrintableWarehouseMapModalProp
                   <table className="w-full text-left border-collapse leading-tight">
                     <thead>
                       {/* Faixa Macro: Veio Esquerdo vs Meio vs Veio Direito */}
-                      <tr className="bg-neutral-900 text-white font-sans text-[9px]">
-                        <th colSpan={2} className="py-1.5 px-2 text-center font-bold uppercase border-r border-neutral-700 w-28">
+                      <tr className="bg-neutral-900 text-white font-sans text-[9px] sm:text-[10px]">
+                        <th colSpan={2} className="py-2 px-2 text-center font-bold uppercase border-r border-neutral-700 w-28">
                           Posição Longitudinal
                         </th>
-                        <th colSpan={Math.floor(galleryCount / 2)} className="py-1.5 px-2 text-center font-black uppercase tracking-wider bg-neutral-800 border-r-4 border-r-red-600 print:border-r-4 print:border-r-red-600">
+                        <th colSpan={Math.floor(galleryCount / 2)} className="py-2 px-2 text-center font-black uppercase tracking-wider bg-neutral-800 border-r-4 border-r-red-600 print:border-r-4 print:border-r-red-600 text-[10.5px] sm:text-xs">
                           ◄ VEIO ESQUERDO (Galerias 1 a 3 • Lado Esquerdo do Meio)
                         </th>
-                        <th colSpan={galleryCount - Math.floor(galleryCount / 2)} className="py-1.5 px-2 text-center font-black uppercase tracking-wider bg-neutral-800 border-r border-neutral-700">
+                        <th colSpan={galleryCount - Math.floor(galleryCount / 2)} className="py-2 px-2 text-center font-black uppercase tracking-wider bg-neutral-800 border-r border-neutral-700 text-[10.5px] sm:text-xs">
                           VEIO DIREITO (Galerias 4 a 6 • Lado Direito do Meio) ►
                         </th>
-                        <th className="py-1.5 px-2 text-right font-black uppercase w-24 bg-neutral-950">
+                        <th className="py-2 px-2 text-right font-black uppercase w-24 bg-neutral-950 text-[10.5px] sm:text-xs">
                           Total Vão
                         </th>
                       </tr>
 
                       {/* Cabeçalho das Colunas Individuais */}
-                      <tr className="bg-neutral-800 text-neutral-200 font-sans border-b border-neutral-400 text-[8.5px]">
-                        <th className="py-1 px-1.5 text-center w-14 border-r border-neutral-700 font-black">Vagão</th>
-                        <th className="py-1 px-1.5 text-center w-14 border-r border-neutral-700 font-bold">Posição</th>
+                      <tr className="bg-neutral-800 text-neutral-200 font-sans border-b border-neutral-400 text-[9px] sm:text-[10px]">
+                        <th className="py-1.5 px-1.5 text-center w-14 border-r border-neutral-700 font-black">Vagão</th>
+                        <th className="py-1.5 px-1.5 text-center w-14 border-r border-neutral-700 font-bold">Posição</th>
                         {Array.from({ length: galleryCount }).map((_, c) => {
                           const midG = Math.floor(galleryCount / 2);
                           const isMidLeft = c === midG - 1;
@@ -783,27 +809,27 @@ export const PrintableWarehouseMapModal: React.FC<PrintableWarehouseMapModalProp
                           return (
                             <th
                               key={c}
-                              className={`py-1 px-2 text-center ${
+                              className={`py-1.5 px-2 text-center ${
                                 isMidLeft
                                   ? 'border-r-4 border-r-red-600 print:border-r-4 print:border-r-red-600 bg-neutral-800'
                                   : 'border-r border-neutral-700'
                               }`}
                             >
-                              <div className="font-bold text-[9px] text-white">Gal. {c + 1}</div>
+                              <div className="font-black text-[10.5px] text-white">Gal. {c + 1}</div>
                               {isMidLeft && (
-                                <div className="text-[7px] font-black text-red-400 uppercase tracking-tighter">
+                                <div className="text-[7.5px] font-black text-red-400 uppercase tracking-tighter">
                                   ◄ MEIO DO ESTALEIRO
                                 </div>
                               )}
                               {isMidRight && (
-                                <div className="text-[7px] font-black text-red-400 uppercase tracking-tighter">
+                                <div className="text-[7.5px] font-black text-red-400 uppercase tracking-tighter">
                                   MEIO DO ESTALEIRO ►
                                 </div>
                               )}
                             </th>
                           );
                         })}
-                        <th className="py-1 px-2 text-right font-bold w-24 bg-neutral-900 text-white">Total Vão</th>
+                        <th className="py-1.5 px-2 text-right font-bold w-24 bg-neutral-900 text-white">Total Vão</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-neutral-200">
@@ -831,13 +857,13 @@ export const PrintableWarehouseMapModal: React.FC<PrintableWarehouseMapModalProp
                         return (
                           <tr key={b} className={b % 2 === 0 ? 'bg-white' : 'bg-neutral-50/70'}>
                             {/* Número do Vagão */}
-                            <td className="py-1.5 px-2 text-center font-black font-mono bg-neutral-100 border-r border-neutral-300 text-[9.5px]">
+                            <td className={`${mapRowPy} text-center font-black font-mono bg-neutral-100 border-r border-neutral-300 ${mapBayText}`}>
                               Vão {String(b + 1).padStart(2, '0')}
                             </td>
 
                             {/* Posição Frente / Fundos */}
-                            <td className="py-1.5 px-1 text-center font-mono border-r border-neutral-300">
-                              <span className={`px-1.5 py-0.5 rounded font-bold text-[8px] ${isFront ? 'text-amber-900 bg-amber-100' : 'text-blue-900 bg-blue-100'}`}>
+                            <td className={`${mapRowPy} px-1 text-center font-mono border-r border-neutral-300`}>
+                              <span className={`px-1.5 py-0.5 rounded font-bold ${isExtraLarge || isLarge ? 'text-[8.5px]' : 'text-[8px]'} ${isFront ? 'text-amber-900 bg-amber-100' : 'text-blue-900 bg-blue-100'}`}>
                                 {isFront ? 'Frente' : 'Fundos'}
                               </span>
                               <div className="text-[7px] text-neutral-400 mt-0.5">
@@ -860,17 +886,17 @@ export const PrintableWarehouseMapModal: React.FC<PrintableWarehouseMapModalProp
                                 return (
                                   <td
                                     key={c}
-                                    className={`py-1.5 px-2 align-middle ${borderClass} ${
+                                    className={`${mapRowPy} align-middle ${borderClass} ${
                                       hasGarlic ? 'bg-amber-50/60' : 'bg-neutral-50/30'
                                     }`}
                                   >
                                     {hasGarlic ? (
                                       <div className="flex items-center justify-between gap-1 leading-tight">
-                                        <div className="flex items-baseline gap-1">
-                                          <span className="font-black text-neutral-950 font-mono text-[9.5px]">
+                                        <div className="flex items-baseline gap-1 shrink-0">
+                                          <span className={`font-black text-neutral-950 font-mono ${mapKgText}`}>
                                             {cell.totalKg.toLocaleString('pt-BR')} kg
                                           </span>
-                                          <span className="text-[8px] text-neutral-600 font-mono font-medium">
+                                          <span className={`${mapBagText} text-neutral-600 font-mono font-bold`}>
                                             ({Math.round(cell.totalBags)}b)
                                           </span>
                                         </div>
@@ -878,7 +904,7 @@ export const PrintableWarehouseMapModal: React.FC<PrintableWarehouseMapModalProp
                                           {cell.varieties.map((v, vIdx) => (
                                             <span
                                               key={vIdx}
-                                              className="px-1.5 py-0.5 rounded text-[8px] font-bold border shadow-xs truncate max-w-[85px]"
+                                              className={`px-1.5 py-0.5 rounded ${mapTagText} font-bold border-2 shadow-xs truncate max-w-[95px]`}
                                               style={{
                                                 backgroundColor: `${v.color}22`,
                                                 borderColor: v.color,
@@ -892,7 +918,7 @@ export const PrintableWarehouseMapModal: React.FC<PrintableWarehouseMapModalProp
                                         </div>
                                       </div>
                                     ) : (
-                                      <div className="text-center text-[8px] text-neutral-400 italic py-0.5">Livre</div>
+                                      <div className={`text-center ${mapBagText} text-neutral-400 italic py-0.5`}>Livre</div>
                                     )}
                                   </td>
                                 );
@@ -903,22 +929,22 @@ export const PrintableWarehouseMapModal: React.FC<PrintableWarehouseMapModalProp
                                 return (
                                   <td
                                     key={c}
-                                    className={`py-1.5 px-2 align-middle ${borderClass} ${
+                                    className={`${mapRowPy} align-middle ${borderClass} ${
                                       alloc ? 'bg-amber-50/60' : 'bg-neutral-50/30'
                                     }`}
                                   >
                                     {alloc && load ? (
                                       <div className="flex items-center justify-between gap-1 leading-tight">
-                                        <div className="flex items-baseline gap-1">
-                                          <span className="font-black text-neutral-950 font-mono text-[9.5px]">
+                                        <div className="flex items-baseline gap-1 shrink-0">
+                                          <span className={`font-black text-neutral-950 font-mono ${mapKgText}`}>
                                             {alloc.allocatedKg.toLocaleString('pt-BR')} kg
                                           </span>
-                                          <span className="text-[8px] text-neutral-600 font-mono font-medium">
+                                          <span className={`${mapBagText} text-neutral-600 font-mono font-bold`}>
                                             ({Math.round(alloc.allocatedBags)}b)
                                           </span>
                                         </div>
                                         <span
-                                          className="px-1.5 py-0.5 rounded text-[8px] font-bold border shadow-xs truncate max-w-[85px]"
+                                          className={`px-1.5 py-0.5 rounded ${mapTagText} font-bold border-2 shadow-xs truncate max-w-[95px]`}
                                           style={{
                                             backgroundColor: `${load.varietyColor}22`,
                                             borderColor: load.varietyColor,
@@ -929,7 +955,7 @@ export const PrintableWarehouseMapModal: React.FC<PrintableWarehouseMapModalProp
                                         </span>
                                       </div>
                                     ) : (
-                                      <div className="text-center text-[8px] text-neutral-400 italic py-0.5">Livre</div>
+                                      <div className={`text-center ${mapBagText} text-neutral-400 italic py-0.5`}>Livre</div>
                                     )}
                                   </td>
                                 );
@@ -937,11 +963,11 @@ export const PrintableWarehouseMapModal: React.FC<PrintableWarehouseMapModalProp
                             })}
 
                             {/* Total Acumulado do Vagão */}
-                            <td className="py-1.5 px-2 text-right font-mono bg-neutral-100 font-bold border-l border-neutral-300 text-[9.5px]">
+                            <td className={`${mapRowPy} text-right font-mono bg-neutral-100 font-bold border-l border-neutral-300`}>
                               {bayTotalKg > 0 ? (
                                 <div>
-                                  <span className="font-black text-neutral-950">{bayTotalKg.toLocaleString('pt-BR')} kg</span>
-                                  <span className="text-[8px] text-neutral-500 font-normal ml-1">({Math.round(bayTotalBags)}b)</span>
+                                  <span className={`font-black text-neutral-950 ${mapKgText}`}>{bayTotalKg.toLocaleString('pt-BR')} kg</span>
+                                  <span className={`${mapBagText} text-neutral-500 font-normal ml-1`}>({Math.round(bayTotalBags)}b)</span>
                                 </div>
                               ) : (
                                 <span className="text-neutral-400">-</span>
@@ -952,8 +978,8 @@ export const PrintableWarehouseMapModal: React.FC<PrintableWarehouseMapModalProp
                       })}
                     </tbody>
                     <tfoot>
-                      <tr className="bg-neutral-200 font-bold font-mono text-neutral-950 border-t-2 border-neutral-800 text-[9px]">
-                        <td colSpan={2} className="py-1.5 px-2 text-center uppercase font-sans font-black">
+                      <tr className="bg-neutral-200 font-bold font-mono text-neutral-950 border-t-2 border-neutral-800">
+                        <td colSpan={2} className={`${mapRowPy} text-center uppercase font-sans font-black ${mapBayText}`}>
                           Totais
                         </td>
                         {Array.from({ length: galleryCount }).map((_, c) => {
@@ -971,27 +997,27 @@ export const PrintableWarehouseMapModal: React.FC<PrintableWarehouseMapModalProp
                           return (
                             <td
                               key={c}
-                              className={`py-1.5 px-2 text-center ${
+                              className={`${mapRowPy} text-center ${
                                 isMidDivider
                                   ? 'border-r-4 border-r-red-600 print:border-r-4 print:border-r-red-600'
                                   : 'border-r border-neutral-300'
                               }`}
                             >
-                              <div className="font-black text-[9.5px]">{galKg.toLocaleString('pt-BR')} kg</div>
-                              <div className="text-[7.5px] text-neutral-600 font-normal font-sans">
+                              <div className={`font-black ${mapKgText}`}>{galKg.toLocaleString('pt-BR')} kg</div>
+                              <div className={`${mapBagText} text-neutral-700 font-bold font-sans`}>
                                 {Math.round(galBags)} bags ({(galKg / 1000).toFixed(1)}t)
                               </div>
                               {isMidDivider && (
-                                <div className="text-[7px] font-black text-red-600 uppercase tracking-tighter">
+                                <div className="text-[7.5px] font-black text-red-600 uppercase tracking-tighter">
                                   ▲ MEIO DO ESTALEIRO ▲
                                 </div>
                               )}
                             </td>
                           );
                         })}
-                        <td className="py-1.5 px-2 text-right font-black text-amber-950 bg-amber-200">
-                          <div className="text-[9.5px]">{totalKg.toLocaleString('pt-BR')} kg</div>
-                          <div className="text-[7.5px] text-amber-900 font-normal font-sans">
+                        <td className={`${mapRowPy} text-right font-black text-amber-950 bg-amber-200`}>
+                          <div className={`font-black ${mapKgText}`}>{totalKg.toLocaleString('pt-BR')} kg</div>
+                          <div className={`${mapBagText} text-amber-950 font-bold font-sans`}>
                             {Math.round(totalBags)} bags ({(totalKg / 1000).toFixed(1)}t)
                           </div>
                         </td>
@@ -1096,6 +1122,8 @@ export const PrintableWarehouseMapModal: React.FC<PrintableWarehouseMapModalProp
                   </div>
                 </div>
               </div>
+                );
+              })()
             ) : (
               /* ========================================================================= */
               /* LAYOUT EXPANDIDO MULTI-PÁGINAS                                            */
