@@ -42,8 +42,9 @@ export const PrintableWarehouseMapModal: React.FC<PrintableWarehouseMapModalProp
   const [selectedTier, setSelectedTier] = useState<number>(0);
   const [filterVariety, setFilterVariety] = useState<string>('all');
   const [printFormat, setPrintFormat] = useState<'single-page' | 'multi-page'>('single-page');
+  const [a4LayoutMode, setA4LayoutMode] = useState<'map-maximized' | 'with-romaneios'>('map-maximized'); // 'map-maximized' dedica 85%+ da folha ao mapa do estaleiro
   const [printScale, setPrintScale] = useState<number>(100); // 100% preenche totalmente a folha A4 em paisagem
-  const [mapDensity, setMapDensity] = useState<'normal' | 'large' | 'extra-large'>('large'); // Tamanho grande para o mapa do estaleiro ocupar o espaço livre
+  const [mapDensity, setMapDensity] = useState<'normal' | 'large' | 'extra-large'>('extra-large'); // 'extra-large' por padrão para o mapa do estaleiro ficar grande e espaçoso
   const [showPrintTips, setShowPrintTips] = useState<boolean>(false);
   const [currentDate] = useState(() => {
     const d = new Date();
@@ -334,7 +335,7 @@ export const PrintableWarehouseMapModal: React.FC<PrintableWarehouseMapModalProp
         @media print {
           @page {
             size: A4 landscape;
-            margin: ${printFormat === 'single-page' ? '2mm 3mm 2mm 3mm' : '8mm 6mm 8mm 6mm'};
+            margin: ${printFormat === 'single-page' ? (a4LayoutMode === 'map-maximized' ? '1.5mm 2mm 1.5mm 2mm' : '2mm 3mm 2mm 3mm') : '8mm 6mm 8mm 6mm'};
           }
           html, body {
             margin: 0 !important;
@@ -360,7 +361,7 @@ export const PrintableWarehouseMapModal: React.FC<PrintableWarehouseMapModalProp
             width: 100% !important;
             max-width: 100% !important;
             margin: 0 !important;
-            padding: ${printFormat === 'single-page' ? '1mm 2mm' : '4mm 6mm'} !important;
+            padding: ${printFormat === 'single-page' ? (a4LayoutMode === 'map-maximized' ? '0.5mm 1.5mm' : '1mm 2mm') : '4mm 6mm'} !important;
             background: #ffffff !important;
             color: #000000 !important;
             box-shadow: none !important;
@@ -431,7 +432,7 @@ export const PrintableWarehouseMapModal: React.FC<PrintableWarehouseMapModalProp
                     ? 'bg-emerald-600 text-white font-bold shadow'
                     : 'text-neutral-400 hover:text-white'
                 }`}
-                title="Ajustar todas as informações (Quilos, Bags, Matriz, Veios, Romaneios e Assinaturas) exatamente em 1 única folha A4 Paisagem"
+                title="Ajustar perfeitamente em 1 única folha A4 Paisagem"
               >
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 <span>1 Folha A4</span>
@@ -450,19 +451,49 @@ export const PrintableWarehouseMapModal: React.FC<PrintableWarehouseMapModalProp
               </button>
             </div>
 
+            {/* SELETOR DE MODO NA FOLHA ÚNICA: MAPA MAXIMIZADO VS COM ROMANEIOS */}
+            {printFormat === 'single-page' && (
+              <div className="flex items-center bg-[#0e1219] p-1 rounded-lg border border-neutral-700 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setA4LayoutMode('map-maximized')}
+                  className={`px-2.5 py-1 rounded font-medium transition-all flex items-center gap-1 ${
+                    a4LayoutMode === 'map-maximized'
+                      ? 'bg-amber-600 text-white font-bold shadow'
+                      : 'text-neutral-400 hover:text-white'
+                  }`}
+                  title="O mapa do estaleiro preenche praticamente toda a folha A4 com células altas e letras grandes"
+                >
+                  <span>🗺️ Mapa Maximizado</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setA4LayoutMode('with-romaneios')}
+                  className={`px-2.5 py-1 rounded font-medium transition-all flex items-center gap-1 ${
+                    a4LayoutMode === 'with-romaneios'
+                      ? 'bg-neutral-700 text-white font-bold shadow'
+                      : 'text-neutral-400 hover:text-white'
+                  }`}
+                  title="Incluir também a tabela detalhada de romaneios de caminhão no rodapé"
+                >
+                  <span>📋 + Romaneios</span>
+                </button>
+              </div>
+            )}
+
             {/* SELETOR DE TAMANHO DO ESTALEIRO & ESCALA A4 (se formato Folha Única) */}
             {printFormat === 'single-page' && (
               <>
                 <div className="flex items-center gap-1.5 bg-[#0e1219] px-2.5 py-1 rounded-lg border border-neutral-700 text-xs">
-                  <span className="text-neutral-400 text-[11px]">Tamanho do Mapa:</span>
+                  <span className="text-neutral-400 text-[11px]">Tamanho Células:</span>
                   <select
                     value={mapDensity}
                     onChange={(e) => setMapDensity(e.target.value as 'normal' | 'large' | 'extra-large')}
                     className="bg-transparent text-amber-400 font-bold focus:outline-none cursor-pointer"
                     title="Aumente para o mapa do estaleiro preencher ao máximo o espaço livre na folha A4"
                   >
-                    <option value="large" className="bg-neutral-900 text-neutral-100">Grande (Recomendado)</option>
-                    <option value="extra-large" className="bg-neutral-900 text-neutral-100">Extra Grande (Máximo)</option>
+                    <option value="extra-large" className="bg-neutral-900 text-neutral-100">Extra Grande (Preenchimento Total)</option>
+                    <option value="large" className="bg-neutral-900 text-neutral-100">Grande</option>
                     <option value="normal" className="bg-neutral-900 text-neutral-100">Normal</option>
                   </select>
                 </div>
@@ -475,10 +506,10 @@ export const PrintableWarehouseMapModal: React.FC<PrintableWarehouseMapModalProp
                     className="bg-transparent text-emerald-400 font-bold focus:outline-none cursor-pointer"
                     title="Ajuste a escala para preencher 100% da folha física"
                   >
-                    <option value={100} className="bg-neutral-900 text-neutral-100">100% (Folha Cheia - Padrão)</option>
-                    <option value={104} className="bg-neutral-900 text-neutral-100">104% (Expansão Total)</option>
+                    <option value={100} className="bg-neutral-900 text-neutral-100">100% (Padrão)</option>
+                    <option value={104} className="bg-neutral-900 text-neutral-100">104% (Máxima)</option>
                     <option value={96} className="bg-neutral-900 text-neutral-100">96% (Margem Segura)</option>
-                    <option value={92} className="bg-neutral-900 text-neutral-100">92% (Compacto)</option>
+                    <option value={92} className="bg-neutral-900 text-neutral-100">92%</option>
                   </select>
                 </div>
               </>
@@ -602,8 +633,8 @@ export const PrintableWarehouseMapModal: React.FC<PrintableWarehouseMapModalProp
         <div className="overflow-y-auto flex-1 p-2 sm:p-4 bg-neutral-900/60 flex justify-center">
           <div
             id="printable-warehouse-map-root"
-            className={`w-full max-w-[1240px] bg-white text-neutral-900 rounded-lg shadow-2xl border border-neutral-300 font-sans ${
-              printFormat === 'single-page' ? 'p-2 sm:p-3.5 print:p-0' : 'p-4 sm:p-6'
+            className={`w-full max-w-[1420px] bg-white text-neutral-900 rounded-lg shadow-2xl border border-neutral-300 font-sans ${
+              printFormat === 'single-page' ? 'p-2 sm:p-3 print:p-0' : 'p-4 sm:p-6'
             }`}
           >
             {printFormat === 'single-page' ? (
@@ -611,13 +642,52 @@ export const PrintableWarehouseMapModal: React.FC<PrintableWarehouseMapModalProp
               /* LAYOUT 100% OTIMIZADO PARA 1 ÚNICA FOLHA A4 PAISAGEM (PÁGINA ÚNICA)     */
               /* ========================================================================= */
               (() => {
+                const isMaximized = a4LayoutMode === 'map-maximized';
                 const isExtraLarge = mapDensity === 'extra-large';
                 const isLarge = mapDensity === 'large';
-                const mapRowPy = isExtraLarge ? 'py-2.5 sm:py-3 px-2' : isLarge ? 'py-2 sm:py-2.5 px-2' : 'py-1.5 px-1.5';
-                const mapKgText = isExtraLarge ? 'text-xs sm:text-[12.5px]' : isLarge ? 'text-[11px] sm:text-xs' : 'text-[9.5px]';
-                const mapBagText = isExtraLarge ? 'text-[10px]' : isLarge ? 'text-[9.5px]' : 'text-[8px]';
-                const mapTagText = isExtraLarge ? 'text-[9.5px]' : isLarge ? 'text-[9px]' : 'text-[8px]';
-                const mapBayText = isExtraLarge ? 'text-xs sm:text-[12px]' : isLarge ? 'text-[11px]' : 'text-[9.5px]';
+                const mapRowPy = isMaximized
+                  ? isExtraLarge
+                    ? 'py-2.5 sm:py-3.5 px-2'
+                    : isLarge
+                    ? 'py-2 sm:py-2.5 px-2'
+                    : 'py-1.5 px-1.5'
+                  : isExtraLarge
+                  ? 'py-2 sm:py-2.5 px-2'
+                  : isLarge
+                  ? 'py-1.5 sm:py-2 px-1.5'
+                  : 'py-1 px-1';
+                const mapKgText = isMaximized
+                  ? isExtraLarge
+                    ? 'text-[12px] sm:text-[13.5px]'
+                    : isLarge
+                    ? 'text-[11px] sm:text-xs'
+                    : 'text-[10px]'
+                  : isExtraLarge
+                  ? 'text-[11px] sm:text-xs'
+                  : isLarge
+                  ? 'text-[10px] sm:text-[11px]'
+                  : 'text-[9px]';
+                const mapBagText = isMaximized
+                  ? isExtraLarge
+                    ? 'text-[10px] sm:text-[11px]'
+                    : isLarge
+                    ? 'text-[9.5px]'
+                    : 'text-[8.5px]'
+                  : 'text-[8px] sm:text-[9px]';
+                const mapTagText = isMaximized
+                  ? isExtraLarge
+                    ? 'text-[9.5px] sm:text-[10.5px]'
+                    : isLarge
+                    ? 'text-[9px]'
+                    : 'text-[8px]'
+                  : 'text-[8px]';
+                const mapBayText = isMaximized
+                  ? isExtraLarge
+                    ? 'text-xs sm:text-[13px]'
+                    : isLarge
+                    ? 'text-[11px]'
+                    : 'text-[10px]'
+                  : 'text-[9.5px] sm:text-[10.5px]';
 
                 return (
               <div className="flex flex-col gap-1.5 sm:gap-2 w-full">
@@ -659,124 +729,199 @@ export const PrintableWarehouseMapModal: React.FC<PrintableWarehouseMapModalProp
                       <span className="text-emerald-700 font-bold">Safra em Plena Cura</span>
                     </div>
                     <div className="font-black text-emerald-800 tracking-tight">
-                      FOLHA ÚNICA OFICIAL • PÁGINA 1/1
+                      {isMaximized ? 'MAPA MAXIMIZADO • FOLHA ÚNICA' : 'FOLHA ÚNICA OFICIAL • PÁGINA 1/1'}
                     </div>
                   </div>
                 </div>
 
-                {/* FAIXA SUPERIOR: KPIS GERAIS + BALANÇO DOS VEIOS + RESUMO DAS VARIEDADES (3 BLOCOS HORIZONTAIS) */}
-                <div className="grid grid-cols-12 gap-2 text-[9px] print-break-inside-avoid">
-                  {/* Bloco 1: KPIs Rápidos (4 colunas) */}
-                  <div className="col-span-4 grid grid-cols-2 gap-1.5 p-1.5 bg-neutral-50 border border-neutral-200 rounded">
-                    <div className="border-r border-neutral-200 pr-1.5">
-                      <div className="text-[7.5px] uppercase font-bold text-neutral-500">Carga Armazenada</div>
-                      <div className="text-xs font-black text-neutral-950 font-mono leading-tight">
-                        {totalKg.toLocaleString('pt-BR')} <span className="text-[8.5px] font-normal">kg</span>
-                      </div>
-                      <div className="text-[8.5px] font-bold text-amber-800 font-mono">
-                        {(totalKg / 1000).toFixed(1)} toneladas
-                      </div>
-                    </div>
-
-                    <div className="pl-1">
-                      <div className="text-[7.5px] uppercase font-bold text-neutral-500">Total de Bags</div>
-                      <div className="text-xs font-black text-neutral-950 font-mono leading-tight">
-                        {totalBags.toLocaleString('pt-BR')} <span className="text-[8.5px] font-normal">bags</span>
-                      </div>
-                      <div className="text-[8.5px] text-neutral-600">
-                        Méd: {totalBags > 0 ? Math.round(totalKg / totalBags) : 0} kg/bag
-                      </div>
-                    </div>
-
-                    <div className="border-r border-neutral-200 pr-1.5 pt-1 border-t border-neutral-200">
-                      <div className="text-[7.5px] uppercase font-bold text-neutral-500">Ocupação Real</div>
-                      <div className="text-xs font-black text-neutral-950 font-mono leading-tight">
-                        {occupancyPercent.toFixed(1)}%
-                      </div>
-                      <div className="text-[8px] text-neutral-500">
-                        {totalOccupiedCells}/{totalAvailableCells} módulos
-                      </div>
-                    </div>
-
-                    <div className="pl-1 pt-1 border-t border-neutral-200">
-                      <div className="text-[7.5px] uppercase font-bold text-neutral-500">Caminhões / Romaneios</div>
-                      <div className="text-xs font-black text-neutral-950 font-mono leading-tight">
-                        {truckLoads.length} <span className="text-[8.5px] font-normal">cargas</span>
-                      </div>
-                      <div className="text-[8px] text-neutral-500">
-                        {varietySummary.length} variedades
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Bloco 2: Balanço dos Veios e Eixo Central (4 colunas) */}
-                  <div className="col-span-4 p-1.5 bg-neutral-50 border border-neutral-200 rounded flex flex-col justify-between">
-                    <div className="flex items-center justify-between pb-0.5 border-b border-neutral-200 text-[8.5px] font-bold uppercase tracking-wider text-neutral-700">
-                      <span>Balanço de Carga & Veios</span>
-                      <span className="text-red-700 font-black">Divisão Central (G3 | G4)</span>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-1.5 py-1">
-                      <div className="bg-white p-1 rounded border border-neutral-200">
-                        <div className="text-[7px] font-bold text-neutral-500 uppercase">Veio Esquerdo (G1-G3)</div>
-                        <div className="font-black text-neutral-950 font-mono text-[10.5px] leading-tight">
-                          {sectorSummary.leftKg.toLocaleString('pt-BR')} kg
+                {/* RESUMO TÉCNICO: MODO MAXIMIZADO (HORIZONTAL ULTRA-COMPACTO) VS MODO COM BLOCOS EXPANDIDOS */}
+                {isMaximized ? (
+                  <div className="flex flex-col gap-1 print-break-inside-avoid">
+                    {/* Barra de Totais e Balanço de Veios */}
+                    <div className="grid grid-cols-12 gap-1.5 text-[9px] bg-neutral-50 p-1.5 rounded border border-neutral-200 items-center">
+                      <div className="col-span-3 flex items-center gap-1.5 border-r border-neutral-200 pr-2">
+                        <div className="text-[7.5px] font-bold uppercase text-neutral-500 leading-none">Carga Total:</div>
+                        <div className="text-xs font-black text-neutral-950 font-mono">
+                          {totalKg.toLocaleString('pt-BR')} kg
                         </div>
-                        <div className="text-[8px] text-neutral-600">
-                          {sectorSummary.leftBags} bags ({(sectorSummary.leftKg / 1000).toFixed(1)}t)
+                        <div className="text-[8px] font-bold text-amber-800 font-mono">
+                          ({(totalKg / 1000).toFixed(1)}t • {totalBags} bags)
                         </div>
                       </div>
 
-                      <div className="bg-white p-1 rounded border border-neutral-200">
-                        <div className="text-[7px] font-bold text-neutral-500 uppercase">Veio Direito (G4-G6)</div>
-                        <div className="font-black text-neutral-950 font-mono text-[10.5px] leading-tight">
-                          {sectorSummary.rightKg.toLocaleString('pt-BR')} kg
+                      <div className="col-span-2 flex items-center gap-1.5 border-r border-neutral-200 pr-2">
+                        <div className="text-[7.5px] font-bold uppercase text-neutral-500 leading-none">Ocupação:</div>
+                        <div className="text-xs font-black text-neutral-950 font-mono">
+                          {occupancyPercent.toFixed(1)}%
                         </div>
-                        <div className="text-[8px] text-neutral-600">
-                          {sectorSummary.rightBags} bags ({(sectorSummary.rightKg / 1000).toFixed(1)}t)
+                        <div className="text-[7.5px] text-neutral-500">
+                          ({totalOccupiedCells}/{totalAvailableCells})
+                        </div>
+                      </div>
+
+                      <div className="col-span-4 flex items-center justify-between border-r border-neutral-200 pr-2 font-mono text-[8.5px]">
+                        <div>
+                          <span className="font-bold text-neutral-600">Veio Esq. (G1-3): </span>
+                          <strong className="text-neutral-950 font-black">{sectorSummary.leftKg.toLocaleString('pt-BR')} kg</strong> ({sectorSummary.leftBags}b)
+                        </div>
+                        <span className="text-neutral-300">|</span>
+                        <div>
+                          <span className="font-bold text-neutral-600">Veio Dir. (G4-6): </span>
+                          <strong className="text-neutral-950 font-black">{sectorSummary.rightKg.toLocaleString('pt-BR')} kg</strong> ({sectorSummary.rightBags}b)
+                        </div>
+                      </div>
+
+                      <div className="col-span-3 flex items-center justify-end gap-2 font-mono text-[8.5px]">
+                        <div>
+                          <span className="text-neutral-500">Frente: </span>
+                          <strong>{sectorSummary.frontKg.toLocaleString('pt-BR')} kg</strong>
+                        </div>
+                        <span className="text-neutral-300">•</span>
+                        <div>
+                          <span className="text-neutral-500">Fundos: </span>
+                          <strong>{sectorSummary.backKg.toLocaleString('pt-BR')} kg</strong>
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between text-[8px] text-neutral-600 pt-0.5 border-t border-neutral-200 font-mono">
-                      <span>Frente (V01-08): <strong>{sectorSummary.frontKg.toLocaleString('pt-BR')} kg</strong> ({sectorSummary.frontBags}b)</span>
-                      <span>•</span>
-                      <span>Fundos (V09-16): <strong>{sectorSummary.backKg.toLocaleString('pt-BR')} kg</strong> ({sectorSummary.backBags}b)</span>
-                    </div>
-                  </div>
-
-                  {/* Bloco 3: Variedades de Alho (4 colunas) */}
-                  <div className="col-span-4 p-1.5 bg-neutral-50 border border-neutral-200 rounded flex flex-col justify-between">
-                    <div className="flex items-center justify-between pb-0.5 border-b border-neutral-200 text-[8.5px] font-bold uppercase tracking-wider text-neutral-700">
-                      <span>Variedades de Alho</span>
-                      <span className="text-neutral-500">{varietySummary.length} cadastradas</span>
-                    </div>
-
-                    <div className="space-y-0.5 py-0.5 overflow-hidden">
-                      {varietySummary.map((v) => {
-                        const percent = totalKg > 0 ? (v.totalKg / totalKg) * 100 : 0;
-                        return (
-                          <div key={v.variety} className="flex items-center justify-between text-[8.5px]">
-                            <div className="flex items-center gap-1.5">
+                    {/* Linha de Variedades com Bolinhas Coloridas */}
+                    <div className="flex flex-wrap items-center justify-between gap-1 px-2 py-1 bg-neutral-50 rounded border border-neutral-200 text-[8.5px]">
+                      <div className="font-bold text-neutral-700 uppercase text-[8px]">
+                        Variedades:
+                      </div>
+                      <div className="flex flex-wrap items-center gap-3">
+                        {varietySummary.map((v) => {
+                          const percent = totalKg > 0 ? (v.totalKg / totalKg) * 100 : 0;
+                          return (
+                            <div key={v.variety} className="flex items-center gap-1.5 font-mono">
                               <span
-                                className="w-2 h-2 rounded-full border border-black/20 shrink-0"
+                                className="w-2.5 h-2.5 rounded-full border border-black/30 shrink-0"
                                 style={{ backgroundColor: v.color }}
                               />
-                              <span className="font-bold text-neutral-900 truncate max-w-[90px]">{v.variety}</span>
+                              <span className="font-bold text-neutral-900 font-sans">{v.variety}:</span>
+                              <span className="font-black text-neutral-950">{v.totalKg.toLocaleString('pt-BR')} kg</span>
+                              <span className="text-neutral-500 text-[7.5px]">({Math.round(v.totalBags)}b • {percent.toFixed(0)}%)</span>
                             </div>
-                            <div className="font-mono text-neutral-800">
-                              <span className="font-bold">{v.totalKg.toLocaleString('pt-BR')} kg</span> ({Math.round(v.totalBags)} b) • <span className="font-black text-amber-800">{percent.toFixed(0)}%</span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    <div className="text-[7.5px] text-neutral-500 truncate pt-0.5 border-t border-neutral-200">
-                      Origens: {Array.from(new Set(varietySummary.flatMap((v) => Array.from(v.farms)))).slice(0, 3).join(', ')}
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
-                </div>
+                ) : (
+                  /* FAIXA SUPERIOR TRADICIONAL (3 BLOCOS HORIZONTAIS) */
+                  <div className="grid grid-cols-12 gap-2 text-[9px] print-break-inside-avoid">
+                    {/* Bloco 1: KPIs Rápidos (4 colunas) */}
+                    <div className="col-span-4 grid grid-cols-2 gap-1.5 p-1.5 bg-neutral-50 border border-neutral-200 rounded">
+                      <div className="border-r border-neutral-200 pr-1.5">
+                        <div className="text-[7.5px] uppercase font-bold text-neutral-500">Carga Armazenada</div>
+                        <div className="text-xs font-black text-neutral-950 font-mono leading-tight">
+                          {totalKg.toLocaleString('pt-BR')} <span className="text-[8.5px] font-normal">kg</span>
+                        </div>
+                        <div className="text-[8.5px] font-bold text-amber-800 font-mono">
+                          {(totalKg / 1000).toFixed(1)} toneladas
+                        </div>
+                      </div>
+
+                      <div className="pl-1">
+                        <div className="text-[7.5px] uppercase font-bold text-neutral-500">Total de Bags</div>
+                        <div className="text-xs font-black text-neutral-950 font-mono leading-tight">
+                          {totalBags.toLocaleString('pt-BR')} <span className="text-[8.5px] font-normal">bags</span>
+                        </div>
+                        <div className="text-[8.5px] text-neutral-600">
+                          Méd: {totalBags > 0 ? Math.round(totalKg / totalBags) : 0} kg/bag
+                        </div>
+                      </div>
+
+                      <div className="border-r border-neutral-200 pr-1.5 pt-1 border-t border-neutral-200">
+                        <div className="text-[7.5px] uppercase font-bold text-neutral-500">Ocupação Real</div>
+                        <div className="text-xs font-black text-neutral-950 font-mono leading-tight">
+                          {occupancyPercent.toFixed(1)}%
+                        </div>
+                        <div className="text-[8px] text-neutral-500">
+                          {totalOccupiedCells}/{totalAvailableCells} módulos
+                        </div>
+                      </div>
+
+                      <div className="pl-1 pt-1 border-t border-neutral-200">
+                        <div className="text-[7.5px] uppercase font-bold text-neutral-500">Caminhões / Romaneios</div>
+                        <div className="text-xs font-black text-neutral-950 font-mono leading-tight">
+                          {truckLoads.length} <span className="text-[8.5px] font-normal">cargas</span>
+                        </div>
+                        <div className="text-[8px] text-neutral-500">
+                          {varietySummary.length} variedades
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Bloco 2: Balanço dos Veios e Eixo Central (4 colunas) */}
+                    <div className="col-span-4 p-1.5 bg-neutral-50 border border-neutral-200 rounded flex flex-col justify-between">
+                      <div className="flex items-center justify-between pb-0.5 border-b border-neutral-200 text-[8.5px] font-bold uppercase tracking-wider text-neutral-700">
+                        <span>Balanço de Carga & Veios</span>
+                        <span className="text-red-700 font-black">Divisão Central (G3 | G4)</span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-1.5 py-1">
+                        <div className="bg-white p-1 rounded border border-neutral-200">
+                          <div className="text-[7px] font-bold text-neutral-500 uppercase">Veio Esquerdo (G1-G3)</div>
+                          <div className="font-black text-neutral-950 font-mono text-[10.5px] leading-tight">
+                            {sectorSummary.leftKg.toLocaleString('pt-BR')} kg
+                          </div>
+                          <div className="text-[8px] text-neutral-600">
+                            {sectorSummary.leftBags} bags ({(sectorSummary.leftKg / 1000).toFixed(1)}t)
+                          </div>
+                        </div>
+
+                        <div className="bg-white p-1 rounded border border-neutral-200">
+                          <div className="text-[7px] font-bold text-neutral-500 uppercase">Veio Direito (G4-G6)</div>
+                          <div className="font-black text-neutral-950 font-mono text-[10.5px] leading-tight">
+                            {sectorSummary.rightKg.toLocaleString('pt-BR')} kg
+                          </div>
+                          <div className="text-[8px] text-neutral-600">
+                            {sectorSummary.rightBags} bags ({(sectorSummary.rightKg / 1000).toFixed(1)}t)
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between text-[8px] text-neutral-600 pt-0.5 border-t border-neutral-200 font-mono">
+                        <span>Frente (V01-08): <strong>{sectorSummary.frontKg.toLocaleString('pt-BR')} kg</strong> ({sectorSummary.frontBags}b)</span>
+                        <span>•</span>
+                        <span>Fundos (V09-16): <strong>{sectorSummary.backKg.toLocaleString('pt-BR')} kg</strong> ({sectorSummary.backBags}b)</span>
+                      </div>
+                    </div>
+
+                    {/* Bloco 3: Variedades de Alho (4 colunas) */}
+                    <div className="col-span-4 p-1.5 bg-neutral-50 border border-neutral-200 rounded flex flex-col justify-between">
+                      <div className="flex items-center justify-between pb-0.5 border-b border-neutral-200 text-[8.5px] font-bold uppercase tracking-wider text-neutral-700">
+                        <span>Variedades de Alho</span>
+                        <span className="text-neutral-500">{varietySummary.length} cadastradas</span>
+                      </div>
+
+                      <div className="space-y-0.5 py-0.5 overflow-hidden">
+                        {varietySummary.map((v) => {
+                          const percent = totalKg > 0 ? (v.totalKg / totalKg) * 100 : 0;
+                          return (
+                            <div key={v.variety} className="flex items-center justify-between text-[8.5px]">
+                              <div className="flex items-center gap-1.5">
+                                <span
+                                  className="w-2 h-2 rounded-full border border-black/20 shrink-0"
+                                  style={{ backgroundColor: v.color }}
+                                />
+                                <span className="font-bold text-neutral-900 truncate max-w-[90px]">{v.variety}</span>
+                              </div>
+                              <div className="font-mono text-neutral-800">
+                                <span className="font-bold">{v.totalKg.toLocaleString('pt-BR')} kg</span> ({Math.round(v.totalBags)} b) • <span className="font-black text-amber-800">{percent.toFixed(0)}%</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <div className="text-[7.5px] text-neutral-500 truncate pt-0.5 border-t border-neutral-200">
+                        Origens: {Array.from(new Set(varietySummary.flatMap((v) => Array.from(v.farms)))).slice(0, 3).join(', ')}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* MATRIZ CENTRAL: TABELA EXPANDIDA DO MAPA (16 VÃOS × 6 GALERIAS COM A LINHA DO MEIO VERMELHA) */}
                 <div className="border-2 border-neutral-400 rounded-md overflow-hidden print-break-inside-avoid shadow-xs">
@@ -1026,101 +1171,132 @@ export const PrintableWarehouseMapModal: React.FC<PrintableWarehouseMapModalProp
                   </table>
                 </div>
 
-                {/* FAIXA INFERIOR: ROMANEIOS (ESQUERDA) + ASSINATURAS OFICIAIS (DIREITA) */}
-                <div className="grid grid-cols-12 gap-2.5 pt-1.5 border-t border-neutral-300 print-break-inside-avoid">
-                  {/* Coluna Esquerda: Romaneios de Caminhões Pesados (7 colunas) */}
-                  <div className="col-span-7">
-                    <div className="text-[8.5px] font-bold uppercase tracking-wider text-neutral-800 mb-1 flex items-center justify-between">
-                      <div className="flex items-center gap-1">
-                        <Truck className="w-3.5 h-3.5 text-neutral-900" />
-                        <span>Relação de Romaneios Pesados ({truckLoads.length} cargas)</span>
-                      </div>
-                      <span className="text-[8px] font-mono text-neutral-500 font-normal">
-                        Carga Total: {totalKg.toLocaleString('pt-BR')} kg ({Math.round(totalBags)} bags)
-                      </span>
+                {/* FAIXA INFERIOR: CONDICIONAL ENTRE MODO MAXIMIZADO (SOMENTE ASSINATURAS E VALIDAÇÃO COMPACTAS) E MODO COM TABELA DE ROMANEIOS */}
+                {isMaximized ? (
+                  <div className="flex items-center justify-between gap-4 pt-2 border-t border-neutral-300 print-break-inside-avoid">
+                    <div className="flex items-center gap-4 text-[8.5px] text-neutral-600 font-mono">
+                      <span><strong>Total Romaneios:</strong> {truckLoads.length} cargas</span>
+                      <span>•</span>
+                      <span><strong>Capacidade Nominal:</strong> 527.904 kg (18,80 ha)</span>
+                      <span>•</span>
+                      <span><strong>Eficiência Ocupação:</strong> {occupancyPercent.toFixed(1)}%</span>
+                      <span>•</span>
+                      <span className="text-neutral-400">Emissão: {currentDate} às {currentTime} • Grupo Igarashi - Estaleiro 03</span>
                     </div>
 
-                    <div className="border border-neutral-300 rounded overflow-hidden">
-                      <table className="w-full text-left text-[8px] font-sans border-collapse leading-tight">
-                        <thead>
-                          <tr className="bg-neutral-100 text-neutral-700 font-bold border-b border-neutral-300 text-[8px]">
-                            <th className="py-1 px-1.5">Romaneio</th>
-                            <th className="py-1 px-1.5">Placa</th>
-                            <th className="py-1 px-1.5">Variedade</th>
-                            <th className="py-1 px-1.5">Origem (Fazenda / Pivô)</th>
-                            <th className="py-1 px-1.5 text-right font-mono">Peso Líquido</th>
-                            <th className="py-1 px-1.5 text-right font-mono">Bags</th>
-                            <th className="py-1 px-1.5">Vãos/Galerias</th>
-                            <th className="py-1 px-1 text-center">Cura</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-neutral-200 font-mono text-[8px]">
-                          {truckLoads.map((load) => {
-                            const occupied = allocationsList.filter((a) => a.loadId === load.id);
-                            const gOccupied = Array.from(new Set(occupied.map((c) => Number(c.galleryIdx) + 1))).sort((a: number, b: number) => a - b);
-                            const bOccupied = Array.from(new Set(occupied.map((c) => Number(c.bayIdx) + 1))).sort((a: number, b: number) => a - b);
-                            return (
-                              <tr key={load.id} className="hover:bg-neutral-50">
-                                <td className="py-1 px-1.5 font-bold text-neutral-950 font-mono">{load.romaneioNumber}</td>
-                                <td className="py-1 px-1.5 text-neutral-700">{load.truckPlate || 'S/ Placa'}</td>
-                                <td className="py-1 px-1.5 font-sans font-bold flex items-center gap-1">
-                                  <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: load.varietyColor }} />
-                                  <span className="truncate max-w-[65px]">{load.variety}</span>
-                                </td>
-                                <td className="py-1 px-1.5 font-sans text-neutral-700 truncate max-w-[95px]">
-                                  {load.farm} • P{load.pivot}
-                                </td>
-                                <td className="py-1 px-1.5 text-right font-bold text-neutral-900 font-mono">
-                                  {load.totalWeightKg.toLocaleString('pt-BR')} kg
-                                </td>
-                                <td className="py-1 px-1.5 text-right text-neutral-700 font-mono">{load.bagsCount} b</td>
-                                <td className="py-1 px-1.5 font-sans text-[7.5px] text-neutral-700 truncate max-w-[90px]">
-                                  G:{gOccupied.join(',')} V:{bOccupied.join(',')}
-                                </td>
-                                <td className="py-1 px-1 text-center text-emerald-800 font-bold font-sans">
-                                  {load.daysCuring}d
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
-                  {/* Coluna Direita: Termo de Conferência & Assinaturas Oficiais (5 colunas) */}
-                  <div className="col-span-5 flex flex-col justify-between pl-1">
-                    <div className="text-[8.5px] font-bold uppercase tracking-wider text-neutral-800 mb-1">
-                      Termo de Conferência & Validação Oficial
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3 pt-3 pb-1 text-center">
-                      <div>
+                    <div className="flex items-center gap-8">
+                      <div className="text-center min-w-[150px]">
                         <div className="border-t border-neutral-900 w-full mb-1"></div>
                         <div className="font-bold text-neutral-950 text-[8.5px] uppercase">
                           Resp. Estaleiro & Balança
                         </div>
-                        <div className="text-[7px] text-neutral-500 leading-tight">
-                          Conferência de Peso Líquido, Bags e Alocação
-                        </div>
+                        <div className="text-[7px] text-neutral-500">Conferência Física & Pesagem</div>
                       </div>
-
-                      <div>
+                      <div className="text-center min-w-[150px]">
                         <div className="border-t border-neutral-900 w-full mb-1"></div>
                         <div className="font-bold text-neutral-950 text-[8.5px] uppercase">
                           Eng. Agrônomo / Qualidade
                         </div>
-                        <div className="text-[7px] text-neutral-500 leading-tight">
-                          Sanidade e Monitoramento de Cura Natural
+                        <div className="text-[7px] text-neutral-500">Monitoramento de Cura Natural</div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-12 gap-2.5 pt-1.5 border-t border-neutral-300 print-break-inside-avoid">
+                    {/* Coluna Esquerda: Romaneios de Caminhões Pesados (7 colunas) */}
+                    <div className="col-span-7">
+                      <div className="text-[8.5px] font-bold uppercase tracking-wider text-neutral-800 mb-1 flex items-center justify-between">
+                        <div className="flex items-center gap-1">
+                          <Truck className="w-3.5 h-3.5 text-neutral-900" />
+                          <span>Relação de Romaneios Pesados ({truckLoads.length} cargas)</span>
                         </div>
+                        <span className="text-[8px] font-mono text-neutral-500 font-normal">
+                          Carga Total: {totalKg.toLocaleString('pt-BR')} kg ({Math.round(totalBags)} bags)
+                        </span>
+                      </div>
+
+                      <div className="border border-neutral-300 rounded overflow-hidden">
+                        <table className="w-full text-left text-[8px] font-sans border-collapse leading-tight">
+                          <thead>
+                            <tr className="bg-neutral-100 text-neutral-700 font-bold border-b border-neutral-300 text-[8px]">
+                              <th className="py-1 px-1.5">Romaneio</th>
+                              <th className="py-1 px-1.5">Placa</th>
+                              <th className="py-1 px-1.5">Variedade</th>
+                              <th className="py-1 px-1.5">Origem (Fazenda / Pivô)</th>
+                              <th className="py-1 px-1.5 text-right font-mono">Peso Líquido</th>
+                              <th className="py-1 px-1.5 text-right font-mono">Bags</th>
+                              <th className="py-1 px-1.5">Vãos/Galerias</th>
+                              <th className="py-1 px-1 text-center">Cura</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-neutral-200 font-mono text-[8px]">
+                            {truckLoads.map((load) => {
+                              const occupied = allocationsList.filter((a) => a.loadId === load.id);
+                              const gOccupied = Array.from(new Set(occupied.map((c) => Number(c.galleryIdx) + 1))).sort((a: number, b: number) => a - b);
+                              const bOccupied = Array.from(new Set(occupied.map((c) => Number(c.bayIdx) + 1))).sort((a: number, b: number) => a - b);
+                              return (
+                                <tr key={load.id} className="hover:bg-neutral-50">
+                                  <td className="py-1 px-1.5 font-bold text-neutral-950 font-mono">{load.romaneioNumber}</td>
+                                  <td className="py-1 px-1.5 text-neutral-700">{load.truckPlate || 'S/ Placa'}</td>
+                                  <td className="py-1 px-1.5 font-sans font-bold flex items-center gap-1">
+                                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: load.varietyColor }} />
+                                    <span className="truncate max-w-[65px]">{load.variety}</span>
+                                  </td>
+                                  <td className="py-1 px-1.5 font-sans text-neutral-700 truncate max-w-[95px]">
+                                    {load.farm} • P{load.pivot}
+                                  </td>
+                                  <td className="py-1 px-1.5 text-right font-bold text-neutral-900 font-mono">
+                                    {load.totalWeightKg.toLocaleString('pt-BR')} kg
+                                  </td>
+                                  <td className="py-1 px-1.5 text-right text-neutral-700 font-mono">{load.bagsCount} b</td>
+                                  <td className="py-1 px-1.5 font-sans text-[7.5px] text-neutral-700 truncate max-w-[90px]">
+                                    G:{gOccupied.join(',')} V:{bOccupied.join(',')}
+                                  </td>
+                                  <td className="py-1 px-1 text-center text-emerald-800 font-bold font-sans">
+                                    {load.daysCuring}d
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
 
-                    <div className="text-[7.5px] text-neutral-400 font-mono text-center pt-1.5 border-t border-neutral-200 leading-none">
-                      Grupo Igarashi • Sistema Integrado de Estaleiros de Alho • Estaleiro 03 • Emissão: {currentDate} às {currentTime} • Documento Oficial em Folha Única A4
+                    {/* Coluna Direita: Termo de Conferência & Assinaturas Oficiais (5 colunas) */}
+                    <div className="col-span-5 flex flex-col justify-between pl-1">
+                      <div className="text-[8.5px] font-bold uppercase tracking-wider text-neutral-800 mb-1">
+                        Termo de Conferência & Validação Oficial
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 pt-3 pb-1 text-center">
+                        <div>
+                          <div className="border-t border-neutral-900 w-full mb-1"></div>
+                          <div className="font-bold text-neutral-950 text-[8.5px] uppercase">
+                            Resp. Estaleiro & Balança
+                          </div>
+                          <div className="text-[7px] text-neutral-500 leading-tight">
+                            Conferência de Peso Líquido, Bags e Alocação
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="border-t border-neutral-900 w-full mb-1"></div>
+                          <div className="font-bold text-neutral-950 text-[8.5px] uppercase">
+                            Eng. Agrônomo / Qualidade
+                          </div>
+                          <div className="text-[7px] text-neutral-500 leading-tight">
+                            Sanidade e Monitoramento de Cura Natural
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="text-[7.5px] text-neutral-400 font-mono text-center pt-1.5 border-t border-neutral-200 leading-none">
+                        Grupo Igarashi • Sistema Integrado de Estaleiros de Alho • Estaleiro 03 • Emissão: {currentDate} às {currentTime} • Documento Oficial em Folha Única A4
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
               </div>
                 );
               })()
